@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
-import { Inbox, Plus, Settings2 } from "lucide-vue-next";
+import { Inbox, Plus, Search, Settings2, X } from "lucide-vue-next";
 import { Draggable } from "@fullcalendar/interaction";
 import { useTaskStore } from "@/stores/tasks";
 import { isTauri } from "@/lib/repo";
@@ -19,6 +19,7 @@ import {
 import type { Occurrence, Task } from "@/lib/types";
 import { parseDate } from "@/lib/date";
 import { getDayMark } from "@/lib/cn-holidays";
+import { searchTasks } from "@/lib/search";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 const emit = defineEmits<{ (e: "open-task", occ: Occurrence): void }>();
@@ -76,6 +77,36 @@ async function submitInboxAdd() {
   inboxAdding.value = false;
 }
 
+/* 搜索：Ctrl+F 或点放大镜进入，Esc 退出 */
+const searching = ref(false);
+const searchQuery = ref("");
+const searchInput = ref<HTMLInputElement>();
+
+const searchResults = computed(() => searchTasks(store.tasks, searchQuery.value));
+
+async function openSearch() {
+  searching.value = true;
+  await nextTick();
+  searchInput.value?.focus();
+}
+function closeSearch() {
+  searching.value = false;
+  searchQuery.value = "";
+}
+function onGlobalKeydown(e: KeyboardEvent) {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
+    e.preventDefault();
+    openSearch();
+  }
+}
+onMounted(() => window.addEventListener("keydown", onGlobalKeydown));
+onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown));
+
+function fmtDueLabel(t: Task): string {
+  if (!t.dueDate) return "收集箱";
+  return t.dueDate.replace(/-/g, "/");
+}
+
 /* 开机自启（设置弹层内） */
 const autostartEnabled = ref(false);
 const dataDir = ref("");
@@ -123,7 +154,17 @@ onBeforeUnmount(() => draggable?.destroy());
   <aside class="flex h-full flex-col">
     <!-- 标题区 -->
     <div class="px-5 pb-1 pt-6">
-      <h1 class="text-2xl font-semibold tracking-tight">今天</h1>
+      <div class="flex items-center justify-between">
+        <h1 class="text-2xl font-semibold tracking-tight">今天</h1>
+        <button
+          class="rounded-md p-1.5 transition-colors hover:bg-black/[0.045]"
+          style="color: var(--text-tertiary)"
+          title="搜索全部任务 (Ctrl+F)"
+          @click="searching ? closeSearch() : openSearch()"
+        >
+          <Search :size="16" />
+        </button>
+      </div>
       <div
         class="mt-0.5 flex items-center gap-1.5 text-[13px]"
         style="color: var(--text-secondary)"
@@ -143,8 +184,78 @@ onBeforeUnmount(() => draggable?.destroy());
       </div>
     </div>
 
+    <!-- 搜索输入 -->
+    <div v-if="searching" class="px-3 pb-1 pt-2">
+      <div
+        class="flex items-center gap-2 rounded-[8px] border bg-white px-2.5 py-1.5"
+        style="border-color: var(--border-subtle)"
+      >
+        <Search :size="13" style="color: var(--text-tertiary)" class="shrink-0" />
+        <input
+          ref="searchInput"
+          v-model="searchQuery"
+          class="min-w-0 flex-1 bg-transparent text-[13px] outline-none"
+          placeholder="搜索标题、备注、标签…"
+          @keydown.esc="closeSearch"
+        />
+        <button
+          class="shrink-0 rounded p-0.5 transition-colors hover:bg-black/[0.045]"
+          style="color: var(--text-tertiary)"
+          title="关闭 (Esc)"
+          @click="closeSearch"
+        >
+          <X :size="13" />
+        </button>
+      </div>
+    </div>
+
     <!-- 列表区 -->
     <div class="min-h-0 flex-1 overflow-y-auto px-3 pb-2">
+      <!-- 搜索结果 -->
+      <div v-if="searching">
+        <div v-if="!searchQuery.trim()" class="px-2 py-3 text-[12px]" style="color: var(--text-tertiary)">
+          输入关键词搜索全部 {{ store.tasks.length }} 条任务；多个关键词用空格分隔
+        </div>
+        <template v-else>
+          <div class="wb-section">
+            <span>搜索结果</span>
+            <span>{{ searchResults.length >= 100 ? "前 100" : searchResults.length }}</span>
+          </div>
+          <div
+            v-if="searchResults.length === 0"
+            class="px-2 py-2 text-[13px]"
+            style="color: var(--text-tertiary)"
+          >
+            没有匹配的任务
+          </div>
+          <ul>
+            <li v-for="t in searchResults" :key="t.id" class="wb-item" :class="t.completed ? 'wb-item-done' : ''">
+              <button
+                class="wb-check"
+                :class="t.completed ? 'done' : ''"
+                :title="t.completed ? '取消完成' : '完成'"
+                @click="store.toggleOccurrence(taskToOcc(t))"
+              >
+                ✓
+              </button>
+              <button
+                class="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[14px]"
+                @click="emit('open-task', taskToOcc(t))"
+              >
+                <span class="truncate" :class="t.completed ? 'line-through' : ''" :title="t.title">{{
+                  t.title
+                }}</span>
+                <span v-if="t.priority > 0" class="wb-pri shrink-0" :class="`wb-pri-${t.priority}`" />
+                <span class="ml-auto shrink-0 text-[11px]" style="color: var(--text-tertiary)">{{
+                  fmtDueLabel(t)
+                }}</span>
+              </button>
+            </li>
+          </ul>
+        </template>
+      </div>
+
+      <div v-show="!searching">
       <!-- 待办 -->
       <div class="wb-section">
         <span>待办</span>
@@ -296,6 +407,7 @@ onBeforeUnmount(() => draggable?.destroy());
           @keydown.esc="adding = false; newTitle = ''"
           @blur="submitAdd"
         />
+      </div>
       </div>
     </div>
 
