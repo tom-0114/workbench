@@ -164,7 +164,7 @@ onBeforeUnmount(() => draggable?.destroy());
             class="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[14px]"
             @click="emit('open-task', occ)"
           >
-            <span class="truncate">{{ occ.task.title }}</span>
+            <span class="truncate" :title="occ.task.title">{{ occ.task.title }}</span>
             <span
               v-if="occ.isVirtual"
               class="text-[10px]"
@@ -191,7 +191,7 @@ onBeforeUnmount(() => draggable?.destroy());
               class="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[14px]"
               @click="emit('open-task', taskToOcc(t))"
             >
-              <span class="truncate">{{ t.title }}</span>
+              <span class="truncate" :title="t.title">{{ t.title }}</span>
               <span class="text-[11px]" style="color: var(--text-tertiary)">{{
                 t.dueDate.slice(5).replace("-", "/")
               }}</span>
@@ -224,6 +224,7 @@ onBeforeUnmount(() => draggable?.destroy());
             </button>
             <button
               class="min-w-0 flex-1 truncate text-left text-[14px] line-through"
+              :title="occ.task.title"
               style="color: var(--text-secondary)"
               @click="emit('open-task', occ)"
             >
@@ -252,6 +253,7 @@ onBeforeUnmount(() => draggable?.destroy());
             </button>
             <button
               class="wb-inbox-title min-w-0 flex-1 truncate text-left text-[14px]"
+              :title="t.title"
               @click="emit('open-task', taskToOcc(t))"
             >
               {{ t.title }}

@@ -117,6 +117,19 @@ const options = computed<CalendarOptions>(() => ({
     const dow = arg.date.getDay();
     return dow === 0 || dow === 6 ? ["wb-weekend"] : [];
   },
+  // 同一天内：未完成在前，已完成沉底；其次按优先级降序
+  eventOrder: (a: any, b: any) => {
+    const oa = (a.extendedProps ?? a).occ as Occurrence | undefined;
+    const ob = (b.extendedProps ?? b).occ as Occurrence | undefined;
+    const ca = oa?.completed ? 1 : 0;
+    const cb = ob?.completed ? 1 : 0;
+    if (ca !== cb) return ca - cb;
+    const pa = oa?.task.priority ?? 0;
+    const pb = ob?.task.priority ?? 0;
+    if (pa !== pb) return pb - pa;
+    return (oa?.task.id ?? 0) - (ob?.task.id ?? 0);
+  },
+  eventOrderStrict: true,
   editable: true,
   droppable: true,
   // 收集箱条目拖入某天 → 设为该天任务
@@ -132,10 +145,11 @@ const options = computed<CalendarOptions>(() => ({
   eventContent: (arg) => {
     const o = arg.event.extendedProps.occ as Occurrence;
     const rep = o.isVirtual ? `<span class="wb-rep">↻</span>` : "";
+    const title = escapeHtml(o.task.title);
     return {
       html:
         `<span class="wb-dot" data-done-btn title="点击切换完成"></span>` +
-        `<span class="wb-title">${escapeHtml(o.task.title)}</span>${rep}`,
+        `<span class="wb-title" title="${title}">${title}</span>${rep}`,
     };
   },
 }));
