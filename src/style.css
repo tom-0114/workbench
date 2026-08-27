@@ -1,0 +1,427 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* ===== Design tokens（macOS 风格） ===== */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f7f7f8;
+  --text-primary: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --text-tertiary: #98989d;
+  --border-subtle: #ececee;
+  --accent-color: #007aff;
+  --hover: rgba(0, 0, 0, 0.035);
+  --selected: rgba(0, 0, 0, 0.055);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* ===== shadcn 变量映射 ===== */
+  --background: var(--bg-primary);
+  --foreground: var(--text-primary);
+  --card: #ffffff;
+  --card-foreground: var(--text-primary);
+  --popover: #ffffff;
+  --popover-foreground: var(--text-primary);
+  --primary: var(--accent-color);
+  --primary-foreground: #ffffff;
+  --secondary: #f2f2f3;
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--bg-secondary);
+  --muted-foreground: var(--text-secondary);
+  --accent: rgba(0, 0, 0, 0.045);
+  --accent-foreground: var(--text-primary);
+  --destructive: #ff3b30;
+  --destructive-foreground: #ffffff;
+  --border: var(--border-subtle);
+  --input: #e5e5ea;
+  --ring: var(--accent-color);
+  --radius: 8px;
+}
+
+.dark {
+  --bg-primary: #1e1e20;
+  --bg-secondary: #252528;
+  --text-primary: #f5f5f7;
+  --text-secondary: #a1a1a6;
+  --text-tertiary: #7c7c80;
+  --border-subtle: rgba(255, 255, 255, 0.09);
+  --hover: rgba(255, 255, 255, 0.05);
+  --selected: rgba(255, 255, 255, 0.08);
+
+  --background: var(--bg-primary);
+  --foreground: var(--text-primary);
+  --card: #252528;
+  --card-foreground: var(--text-primary);
+  --popover: #252528;
+  --popover-foreground: var(--text-primary);
+  --primary: #0a84ff;
+  --primary-foreground: #ffffff;
+  --secondary: #333336;
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--bg-secondary);
+  --muted-foreground: var(--text-secondary);
+  --accent: rgba(255, 255, 255, 0.06);
+  --accent-foreground: var(--text-primary);
+  --destructive: #ff453a;
+  --destructive-foreground: #ffffff;
+  --border: var(--border-subtle);
+  --input: rgba(255, 255, 255, 0.14);
+  --ring: #0a84ff;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    font-family:
+      -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC",
+      "Microsoft YaHei", "Segoe UI", sans-serif;
+    font-size: 14px;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  button {
+    cursor: default;
+  }
+}
+
+/* =========================================================
+   侧边栏 Todo item
+   ========================================================= */
+.wb-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 8px;
+  border-radius: 7px;
+  transition: background 150ms ease-out;
+}
+.wb-item:hover {
+  background: var(--hover);
+}
+.wb-item.wb-item-done {
+  opacity: 0.55;
+}
+
+/* 圆形完成 checkbox */
+.wb-check {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1.5px solid #c7c7cc;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+  font-size: 9px;
+  line-height: 1;
+  transition:
+    border-color 150ms ease-out,
+    background 150ms ease-out;
+}
+.wb-check:hover {
+  border-color: var(--accent-color);
+}
+.wb-check.done {
+  background: var(--accent-color);
+  border-color: var(--accent-color);
+  color: #ffffff;
+}
+
+/* 分区标题 */
+.wb-section {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 8px;
+  margin: 18px 0 4px;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  color: var(--text-tertiary);
+}
+
+/* 侧边栏优先级小圆点 */
+.wb-pri {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+}
+
+/* =========================================================
+   FullCalendar 月视图（macOS 风格覆写）
+   ========================================================= */
+.wb-calendar .fc {
+  --fc-border-color: var(--border-subtle);
+  --fc-today-bg-color: transparent;
+  --fc-page-bg-color: var(--bg-primary);
+  --fc-neutral-bg-color: var(--bg-primary);
+  font-size: 13px;
+}
+
+/* 顶部工具栏 */
+.wb-calendar .fc .fc-header-toolbar {
+  margin-bottom: 8px;
+  padding: 18px 20px 0;
+}
+.wb-calendar .fc .fc-toolbar-title {
+  font-size: 19px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+}
+.wb-calendar .fc .fc-button {
+  background: transparent;
+  border: none;
+  box-shadow: none !important;
+  color: var(--text-secondary);
+  padding: 3px 9px;
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  transition:
+    background 150ms ease-out,
+    color 150ms ease-out;
+}
+.wb-calendar .fc .fc-button:hover {
+  background: var(--hover);
+  color: var(--text-primary);
+}
+.wb-calendar .fc .fc-button:active,
+.wb-calendar .fc .fc-button:focus {
+  background: var(--selected);
+  box-shadow: none !important;
+}
+.wb-calendar .fc .fc-today-button {
+  background: var(--secondary);
+  color: var(--text-primary);
+}
+.wb-calendar .fc .fc-today-button:disabled {
+  background: transparent;
+  color: var(--text-tertiary);
+  opacity: 1;
+}
+.wb-calendar .fc .fc-icon {
+  font-size: 1.05em;
+  vertical-align: -0.1em;
+}
+.wb-calendar .fc .fc-button-group {
+  gap: 2px;
+}
+
+/* 视图区留白 */
+.wb-calendar .fc .fc-view-harness {
+  margin: 0 16px 14px;
+}
+
+/* 网格：退到背景 */
+.wb-calendar .fc .fc-scrollgrid {
+  border: none;
+}
+.wb-calendar .fc .fc-scrollgrid td:last-of-type {
+  border-right: none;
+}
+.wb-calendar .fc .fc-scrollgrid-section > td {
+  border-bottom: none;
+}
+
+/* 星期表头 */
+.wb-calendar .fc .fc-col-header-cell {
+  border: none;
+  padding: 4px 0 6px;
+}
+.wb-calendar .fc .fc-col-header-cell-cushion {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  text-decoration: none;
+}
+
+/* 日期数字 */
+.wb-calendar .fc .fc-daygrid-day-top {
+  flex-direction: row;
+  padding: 3px 4px 0;
+}
+.wb-calendar .fc .fc-daygrid-day-number {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 3px;
+  text-decoration: none;
+}
+.wb-calendar .fc .fc-daygrid-day-number .wb-daynum {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  min-width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.wb-calendar .fc .fc-day-other .fc-daygrid-day-number {
+  opacity: 0.38;
+}
+.wb-calendar .fc .fc-day-today .wb-daynum {
+  background: var(--accent-color);
+  color: #ffffff;
+  font-weight: 600;
+  border-radius: 999px;
+  width: 22px;
+  min-width: 22px;
+}
+
+/* 日期旁的节假日角标（如 国庆·休 / 班） */
+.wb-calendar .fc .wb-day-badge {
+  flex: none;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 2.5px 4px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+.wb-calendar .fc .fc-day.wb-holiday .wb-day-badge {
+  color: #248a3d;
+  background: rgba(52, 199, 89, 0.14);
+}
+.wb-calendar .fc .fc-day.wb-workday .wb-day-badge {
+  color: #cc7700;
+  background: rgba(255, 149, 0, 0.16);
+}
+
+/* 日期格子 hover */
+.wb-calendar .fc .fc-daygrid-day-frame {
+  transition: background 150ms ease-out;
+}
+.wb-calendar .fc .fc-daygrid-day:hover .fc-daygrid-day-frame {
+  background: var(--hover);
+}
+
+/* "+n 更多" 链接 */
+.wb-calendar .fc .fc-daygrid-more-link {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  padding: 1px 6px;
+}
+
+/* =========================================================
+   月视图中的 Todo（轻量表达：圆点 + 文字，无底色）
+   ========================================================= */
+.wb-calendar .fc .fc-daygrid-event,
+.wb-calendar .fc .fc-daygrid-event:hover {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+.wb-event {
+  display: flex !important;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 6px;
+  margin: 0 4px 1px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  overflow: hidden;
+  transition: background 150ms ease-out;
+}
+.wb-event:hover {
+  background: var(--hover);
+}
+.wb-event .wb-dot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  border: 1.5px solid var(--dot-color, #c7c7cc);
+  box-sizing: border-box;
+  transition: background 150ms ease-out;
+}
+.wb-event.wb-done .wb-dot {
+  background: var(--dot-color, #c7c7cc);
+}
+.wb-event .wb-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-primary);
+}
+.wb-event.wb-done {
+  opacity: 0.55;
+}
+.wb-event.wb-done .wb-title {
+  color: var(--text-tertiary);
+  text-decoration: line-through;
+}
+.wb-event .wb-rep {
+  flex: none;
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+/* 优先级 = 圆点颜色，仅此而已 */
+.wb-event.wb-p0 { --dot-color: #c7c7cc; }
+.wb-event.wb-p1 { --dot-color: #007aff; }
+.wb-event.wb-p2 { --dot-color: #ff9500; }
+.wb-event.wb-p3 { --dot-color: #ff3b30; }
+
+.wb-pri-0 { background: #c7c7cc; }
+.wb-pri-1 { background: #007aff; }
+.wb-pri-2 { background: #ff9500; }
+.wb-pri-3 { background: #ff3b30; }
+
+/* =========================================================
+   中国节假日 / 调休 / 周末 背景区分
+   ========================================================= */
+.wb-calendar .fc .fc-day.wb-weekend {
+  background: rgba(0, 0, 0, 0.018);
+}
+.wb-calendar .fc .fc-day.wb-holiday {
+  background: rgba(52, 199, 89, 0.06);
+}
+.wb-calendar .fc .fc-day.wb-workday {
+  background: rgba(255, 149, 0, 0.055);
+}
+
+/* 非当月的节假日淡化，避免喧宾夺主 */
+.wb-calendar .fc .fc-day-other.wb-holiday,
+.wb-calendar .fc .fc-day-other.wb-workday {
+  background: rgba(0, 0, 0, 0.018);
+}

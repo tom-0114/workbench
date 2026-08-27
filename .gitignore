@@ -1,0 +1,10 @@
+node_modules/
+dist/
+src-tauri/target/
+src-tauri/gen/schemas/
+*.local
+.DS_Store
+
+# 签名私钥绝不入库
+*.key
+*.key.pub

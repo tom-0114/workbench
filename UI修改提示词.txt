@@ -1,0 +1,600 @@
+请重新设计当前「个人工作台」的 UI，使其具有现代 macOS 原生生产力应用的视觉体验。
+
+## 核心要求
+
+这是一个以「月度日历 + Todo List」为核心的个人工作台，不要改变现有产品的信息架构和核心功能。
+
+当前主要结构保持：
+
+* 左侧：今天的日期 + 当日 Todo List
+* 右侧：月度 Calendar
+* Todo 同时显示在对应日期的 Calendar Cell 中
+* 支持月份切换、回到今天
+* 保留现有 Todo 交互逻辑
+
+重点是重新设计视觉系统和交互细节，而不是重新发明产品。
+
+---
+
+## 设计方向
+
+整体参考现代 macOS 原生生产力应用的设计语言，例如 Apple Calendar、Reminders、Things 等应用的感觉。
+
+关键词：
+
+macOS Native / Quiet / Minimal / Refined / Productivity / Content-first / Subtle
+
+希望最终效果：
+
+* 安静
+* 克制
+* 精致
+* 清晰
+* 有轻微的 macOS 原生应用质感
+* 长时间使用不会视觉疲劳
+* 看起来像真正的桌面生产力软件，而不是 SaaS Dashboard
+
+不要直接复制任何具体 Apple 产品。
+
+---
+
+## 1. 整体视觉
+
+使用非常浅的 neutral background。
+
+主内容区域接近：
+
+#FFFFFF
+
+侧边栏可以使用略微不同的浅灰背景，例如：
+
+#F7F7F8
+#F5F5F7
+
+整体避免纯黑色的大面积使用。
+
+文字使用不同层级的 neutral gray，而不是所有文字都使用纯黑。
+
+建议：
+
+Primary Text：
+#1D1D1F
+
+Secondary Text：
+#6E6E73
+
+Tertiary Text：
+#98989D
+
+Divider / Border：
+使用非常低对比度的灰色。
+
+整体视觉必须轻盈。
+
+---
+
+## 2. 不要过度使用“卡片”
+
+这是一个桌面生产力工具，不是 SaaS Dashboard。
+
+不要把：
+
+Calendar
+Todo
+Today
+Header
+Navigation
+
+全部包进 Card。
+
+优先通过：
+
+spacing
+typography
+background contrast
+subtle divider
+
+建立视觉层级。
+
+Card 只在真正需要强调独立内容时使用。
+
+---
+
+## 3. 左侧 Today Sidebar
+
+重新设计左侧「今天」区域。
+
+它应该像 macOS 应用的 sidebar / inspector，而不是网页侧栏。
+
+顶部：
+
+今天
+8月26日 · 周三
+
+日期作为 secondary information，不需要抢视觉注意力。
+
+Todo 区域：
+
+TODAY                         1
+
+○ 测试
+
+Todo item 不要使用传统表格样式。
+
+每一个 Todo：
+
+* 左侧圆形 completion checkbox
+* 中间任务标题
+* hover 时出现 subtle background
+* 已完成后降低 opacity，并给文字增加 line-through
+* spacing 舒服但不要过大
+
+Todo hover 可以使用：
+
+rgba(0,0,0,0.035)
+
+选中：
+
+rgba(0,0,0,0.055)
+
+Todo item 圆角：
+
+6px - 8px
+
+底部可以提供：
+
+* 新建待办
+
+但视觉权重应该很低。
+
+---
+
+## 4. Calendar Header
+
+Calendar 顶部重新整理。
+
+左侧：
+
+2026年8月
+
+右侧：
+
+‹    今天    ›
+
+不要使用三个非常明显的传统 Button。
+
+月份切换按钮应该类似 macOS toolbar：
+
+* 小尺寸
+* icon-only
+* subtle hover
+* 无明显 border 或仅有极淡 border
+* 今天按钮使用轻量 secondary button
+
+Header 保持大量 breathing room。
+
+---
+
+## 5. Calendar Grid
+
+Calendar 是整个应用最重要的区域。
+
+减少当前网格线的视觉重量。
+
+不要使用明显的 #ddd 边框。
+
+使用非常淡的 divider：
+
+rgba(0,0,0,0.06)
+
+或者接近：
+
+#ECECEE
+
+Calendar grid 应该存在，但视觉上退到背景。
+
+让用户首先看到：
+
+日期
+Todo
+Today
+
+而不是首先看到网格。
+
+---
+
+## 6. 日期设计
+
+普通日期：
+
+使用 13-14px 左右的字体。
+
+非当前月份：
+
+降低 opacity，例如 35%-40%。
+
+今天（Today）不要再使用整块灰色背景强调。
+
+改为 macOS Calendar 风格：
+
+26
+
+日期数字使用 accent color 或圆形 accent background。
+
+例如：
+
+● 26
+
+可以使用系统蓝：
+
+#007AFF
+
+或者：
+
+background: #007AFF
+color: white
+border-radius: 999px
+
+只强调日期数字本身。
+
+Calendar Cell 本身保持干净。
+
+---
+
+## 7. Calendar 中的 Todo
+
+现在 Calendar 中的 Todo 看起来比较像传统 Calendar Event。
+
+希望改成更加轻量的任务表达。
+
+例如：
+
+○ 测试
+
+或者：
+
+● 测试
+
+Todo 不要使用大面积灰色背景。
+
+默认可以无背景。
+
+Hover 时才出现非常浅的背景。
+
+如果需要区分任务类型，可以使用：
+
+small dot
+accent color
+subtle tint
+
+不要使用大量不同颜色。
+
+Todo 的 typography 应该小而清晰。
+
+---
+
+## 8. Accent Color
+
+整个产品只使用一个主要 Accent Color。
+
+优先：
+
+Apple-like System Blue
+#007AFF
+
+Accent color 只用于：
+
+* Today
+* Selected
+* Active
+* Focus
+* Important interactive state
+
+不要到处使用蓝色。
+
+大部分界面保持 neutral。
+
+---
+
+## 9. 圆角
+
+不要使用 SaaS 风格的大圆角。
+
+建议：
+
+Todo item：6-8px
+Button：6-8px
+Input：8-10px
+Popover：10-12px
+
+Calendar Cell 不需要圆角。
+
+避免 16px / 20px / 24px 的大圆角 Card。
+
+---
+
+## 10. 阴影
+
+主界面基本不要 shadow。
+
+只有：
+
+Popover
+Context Menu
+Dialog
+Floating Panel
+
+允许使用非常 subtle 的 shadow。
+
+禁止：
+
+heavy shadow
+glowing shadow
+neon
+gradient shadow
+
+---
+
+## 11. 毛玻璃
+
+不要为了所谓“Apple 风”大量使用 glassmorphism。
+
+主内容区域保持实体背景。
+
+只有真正符合桌面应用逻辑的：
+
+Sidebar
+Popover
+Floating Panel
+
+可以考虑非常轻微的 translucency / backdrop blur。
+
+原则：
+
+80% clean solid UI
+15% subtle material
+5% motion/details
+
+---
+
+## 12. Typography
+
+建立清晰但克制的 typography hierarchy。
+
+不要所有文字都 bold。
+
+例如：
+
+页面标题：
+20-24px / semibold
+
+月份：
+18-20px / semibold
+
+Sidebar「今天」：
+24-28px / semibold
+
+Todo：
+14px / regular-medium
+
+日期：
+13px / medium
+
+Secondary information：
+12-13px / regular
+
+中文环境优先使用系统字体栈。
+
+例如：
+
+-apple-system
+BlinkMacSystemFont
+"SF Pro Display"
+"SF Pro Text"
+"PingFang SC"
+"Microsoft YaHei"
+sans-serif
+
+不要额外引入花哨字体。
+
+---
+
+## 13. Spacing
+
+建立统一 spacing system。
+
+以 4px 为基础：
+
+4
+8
+12
+16
+20
+24
+32
+
+避免当前某些元素过于贴边。
+
+Sidebar horizontal padding：
+
+16-20px
+
+Calendar header：
+
+20-24px
+
+Todo item vertical padding：
+
+6-8px
+
+整体应该 compact，但不能拥挤。
+
+---
+
+## 14. 顶部区域
+
+当前界面顶部「个人工作台」出现了多层视觉结构。
+
+请简化。
+
+如果操作系统窗口本身已经显示应用名称，则应用内部不需要再次使用一个很大的「个人工作台」Header。
+
+减少无意义的垂直空间。
+
+「开机自启」属于 Settings，不应该作为主界面的常驻核心操作。
+
+如果不影响现有功能逻辑，请将它移动到 Settings / Preferences 中。
+
+如果暂时无法调整功能结构，则至少降低它的视觉权重。
+
+---
+
+## 15. Micro Interaction
+
+加入非常 subtle 的交互反馈：
+
+Todo hover
+Calendar cell hover
+Button hover
+Selected date
+Checkbox completion
+Month transition
+
+动画时间：
+
+120ms - 220ms
+
+使用：
+
+ease-out
+
+不要使用夸张的：
+
+bounce
+spring
+scale animation
+large movement
+
+所有 animation 都应该让用户几乎意识不到，但感觉界面更加顺滑。
+
+---
+
+## 16. Empty State
+
+Calendar 大量没有任务的日期保持干净。
+
+不要为了“丰富界面”增加无意义内容。
+
+Empty space 是这个设计的一部分。
+
+不要自动添加：
+
+统计卡片
+AI 卡片
+天气
+Quote
+Progress Ring
+Bento Grid
+各种 Dashboard Widget
+
+这个产品的核心就是：
+
+Calendar + Todo
+
+保持专注。
+
+---
+
+## 17. 禁止出现的设计
+
+请明确避免以下典型 AI-generated UI：
+
+* 大量渐变
+* 紫色 AI gradient
+* Glassmorphism everywhere
+* 巨大圆角
+* Card inside Card
+* 到处都是 shadow
+* Bento Grid 滥用
+* 巨大的 Welcome Header
+* 每个区域都有 icon
+* 过度使用 emoji
+* Neon
+* Floating everything
+* SaaS Landing Page 风格
+* Dashboard 数据大屏风格
+
+我们要的是：
+
+「一个每天都会打开的 macOS Personal Productivity App」
+
+而不是：
+
+「一个用来展示 UI 能力的 Dribbble Concept」。
+
+---
+
+## 18. 实现要求
+
+首先检查现有代码结构和组件。
+
+不要重写现有业务逻辑。
+
+不要破坏：
+
+* Todo 创建
+* Todo 完成
+* 日期关联
+* Calendar 数据
+* 月份切换
+* 数据持久化
+* 开机启动等已有功能
+
+优先：
+
+1. 重构 CSS / styling
+2. 优化 layout
+3. 优化 typography
+4. 优化 spacing
+5. 优化 component visual states
+6. 最后再添加 subtle animation
+
+如果当前存在 design tokens / CSS variables，请优先统一成新的 design system。
+
+如果没有，请建立最小化 design tokens，例如：
+
+--bg-primary
+--bg-secondary
+--text-primary
+--text-secondary
+--text-tertiary
+--border-subtle
+--accent
+--hover
+--selected
+--radius-sm
+--radius-md
+
+不要为了 UI 改造引入重量级 UI framework。
+
+---
+
+## 最终目标
+
+修改完成以后，第一眼应该感觉：
+
+「这像一个精致、安静的 macOS 原生个人效率工具。」
+
+而不是：
+
+「这是一个套了 Apple 风 CSS 的网页。」
+
+保留 Calendar + Todo 的极简核心。
+
+功能退后，内容向前。
+
+装饰退后，信息向前。
+
+不要一次性加入新的产品功能。
+
+先把现有界面做到足够精致。
