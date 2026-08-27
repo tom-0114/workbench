@@ -69,10 +69,21 @@ class SqliteRepo implements TaskRepository {
   async init(): Promise<void> {
     const Database = (await import("@tauri-apps/plugin-sql")).default;
     this.db = await Database.load("sqlite:workspace.db");
-    // 禁用 WAL：每次提交直接落主文件。应用内更新会强杀进程，
-    // WAL 未 checkpoint 的数据会丢（曾导致 2026-08-27 数据丢失事故）
-    await this.db.select("PRAGMA journal_mode=DELETE");
     for (const sql of SCHEMA) await this.db.execute(sql);
+    await this.checkpoint();
+  }
+
+  /**
+   * 每次写入后把 WAL 落入主文件。应用内更新会强杀进程，
+   * 未 checkpoint 的 WAL 会丢（2026-08-27 数据丢失事故的根因）。
+   * 注：改 journal_mode=DELETE 无效——sqlx 连接池的新连接会把模式重置回 WAL。
+   */
+  private async checkpoint(): Promise<void> {
+    try {
+      await this.db!.select("PRAGMA wal_checkpoint(TRUNCATE)");
+    } catch {
+      // checkpoint 失败不影响业务写入本身
+    }
   }
 
   async listTasks(): Promise<Task[]> {
@@ -97,6 +108,7 @@ class SqliteRepo implements TaskRepository {
         now,
       ],
     );
+    await this.checkpoint();
     return { ...input, id: res.lastInsertId ?? 0, createdAt: now, updatedAt: now };
   }
 
@@ -116,11 +128,13 @@ class SqliteRepo implements TaskRepository {
         task.id,
       ],
     );
+    await this.checkpoint();
   }
 
   async deleteTask(id: number): Promise<void> {
     await this.db!.execute("DELETE FROM tasks WHERE id=$1", [id]);
     await this.db!.execute("DELETE FROM task_completions WHERE task_id=$1", [id]);
+    await this.checkpoint();
   }
 
   async listCompletions(): Promise<Set<string>> {
@@ -142,6 +156,7 @@ class SqliteRepo implements TaskRepository {
         date,
       ]);
     }
+    await this.checkpoint();
   }
 }
 
