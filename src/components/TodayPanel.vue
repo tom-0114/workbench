@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
-import { Inbox, Plus, Search, Settings2, X } from "lucide-vue-next";
+import { Inbox, Plus, RefreshCw, Search, Settings2, X } from "lucide-vue-next";
 import { Draggable } from "@fullcalendar/interaction";
 import { useTaskStore } from "@/stores/tasks";
 import { isTauri } from "@/lib/repo";
@@ -466,14 +466,24 @@ onBeforeUnmount(() => draggable?.destroy());
               >
                 更新中 {{ updateProgress }}%
               </button>
-              <button
-                v-else-if="updateAvailable"
-                class="rounded-md px-2 py-0.5 text-[12px] text-white transition-opacity hover:opacity-90"
-                style="background: var(--accent-color)"
-                @click="installUpdate"
-              >
-                更新到 v{{ updateVersion }}
-              </button>
+              <span v-else-if="updateAvailable" class="flex items-center gap-1">
+                <button
+                  class="rounded-md px-2 py-0.5 text-[12px] text-white transition-opacity hover:opacity-90"
+                  style="background: var(--accent-color)"
+                  @click="installUpdate"
+                >
+                  更新到 v{{ updateVersion }}
+                </button>
+                <button
+                  class="rounded-md p-1 transition-colors hover:bg-black/[0.045]"
+                  style="color: var(--text-tertiary)"
+                  title="重新检查是否有更新版本"
+                  :disabled="checking"
+                  @click="checkUpdate(false)"
+                >
+                  <RefreshCw :size="12" :class="checking ? 'animate-spin' : ''" />
+                </button>
+              </span>
               <button
                 v-else
                 class="rounded-md px-2 py-0.5 text-[12px] transition-colors hover:bg-black/[0.045]"

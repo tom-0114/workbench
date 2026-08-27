@@ -60,7 +60,14 @@ async function remove() {
 }
 
 const priorityOptions: Priority[] = [0, 1, 2, 3];
-const repeatOptions: RepeatRule[] = ["none", "daily", "weekly", "monthly"];
+const repeatOptions: RepeatRule[] = [
+  "none",
+  "daily",
+  "weekly",
+  "monthly",
+  "yearly",
+  "yearly-lunar",
+];
 </script>
 
 <template>

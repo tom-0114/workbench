@@ -1,4 +1,4 @@
-export type RepeatRule = "none" | "daily" | "weekly" | "monthly";
+export type RepeatRule = "none" | "daily" | "weekly" | "monthly" | "yearly" | "yearly-lunar";
 
 export type Priority = 0 | 1 | 2 | 3; // 0无 1低 2中 3高
 
@@ -37,4 +37,6 @@ export const REPEAT_LABELS: Record<RepeatRule, string> = {
   daily: "每天",
   weekly: "每周",
   monthly: "每月",
+  yearly: "每年",
+  "yearly-lunar": "每年·农历",
 };

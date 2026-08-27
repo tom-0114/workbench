@@ -78,7 +78,7 @@ function mapRepeat(rule, status) {
   if (/FREQ=WEEKLY/.test(rule)) return { rule: "weekly", note: "" };
   if (/FREQ=MONTHLY/.test(rule)) return { rule: "monthly", note: "" };
   if (/FREQ=YEARLY/.test(rule))
-    return { rule: "none", note: rule.startsWith("LUNAR") ? "[导入] 原为农历每年重复" : "[导入] 原为每年重复" };
+    return { rule: rule.startsWith("LUNAR") ? "yearly-lunar" : "yearly", note: "" };
   return { rule: "none", note: "" };
 }
 
