@@ -69,6 +69,9 @@ class SqliteRepo implements TaskRepository {
   async init(): Promise<void> {
     const Database = (await import("@tauri-apps/plugin-sql")).default;
     this.db = await Database.load("sqlite:workspace.db");
+    // 禁用 WAL：每次提交直接落主文件。应用内更新会强杀进程，
+    // WAL 未 checkpoint 的数据会丢（曾导致 2026-08-27 数据丢失事故）
+    await this.db.select("PRAGMA journal_mode=DELETE");
     for (const sql of SCHEMA) await this.db.execute(sql);
   }
 
