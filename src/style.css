@@ -408,6 +408,55 @@
 .wb-pri-3 { background: #ff3b30; }
 
 /* =========================================================
+   年视图（multiMonth）：更紧凑，弱化细节
+   ========================================================= */
+.wb-calendar .fc .fc-multimonth {
+  border: none;
+}
+.wb-calendar .fc .fc-multimonth-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 10px 0 6px;
+}
+.wb-calendar .fc .fc-multimonth-daygrid {
+  background: transparent;
+}
+/* 年视图里角标太挤，只保留底色 */
+.wb-calendar .fc .fc-multimonth .wb-day-badge {
+  display: none;
+}
+.wb-calendar .fc .fc-multimonth .fc-daygrid-day-number {
+  padding: 1px 2px;
+}
+.wb-calendar .fc .fc-multimonth .wb-daynum {
+  font-size: 11px;
+  min-width: 18px;
+  height: 18px;
+}
+.wb-calendar .fc .fc-multimonth .fc-day-today .wb-daynum {
+  width: 18px;
+  min-width: 18px;
+}
+.wb-calendar .fc .fc-multimonth .wb-event {
+  padding: 0 3px;
+  margin: 0 2px 1px;
+  gap: 4px;
+}
+.wb-calendar .fc .fc-multimonth .wb-event .wb-title {
+  font-size: 10.5px;
+}
+.wb-calendar .fc .fc-multimonth .wb-event .wb-dot {
+  width: 7px;
+  height: 7px;
+}
+/* 视图切换按钮选中态 */
+.wb-calendar .fc .fc-button.fc-button-active {
+  background: var(--selected);
+  color: var(--text-primary);
+}
+
+/* =========================================================
    中国节假日 / 调休 / 周末 背景区分
    ========================================================= */
 .wb-calendar .fc .fc-day.wb-weekend {

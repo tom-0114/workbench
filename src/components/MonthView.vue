@@ -2,6 +2,7 @@
 import { computed, ref } from "vue";
 import FullCalendar from "@fullcalendar/vue3";
 import dayGridPlugin from "@fullcalendar/daygrid";
+import multiMonthPlugin from "@fullcalendar/multimonth";
 import interactionPlugin, { type DateClickArg } from "@fullcalendar/interaction";
 import zhCn from "@fullcalendar/core/locales/zh-cn";
 import type {
@@ -21,7 +22,7 @@ const emit = defineEmits<{ (e: "open-task", occ: Occurrence): void }>();
 const store = useTaskStore();
 
 // 保持引用稳定，避免 options 重算时触发日历整体重建
-const PLUGINS = [dayGridPlugin, interactionPlugin];
+const PLUGINS = [dayGridPlugin, multiMonthPlugin, interactionPlugin];
 
 const quickAdd = ref<{ date: string; x: number; y: number } | null>(null);
 const range = ref<{ start: string; end: string } | null>(null);
@@ -90,7 +91,13 @@ const options = computed<CalendarOptions>(() => ({
   locale: zhCn,
   firstDay: 1,
   height: "100%",
-  headerToolbar: { left: "title", center: "", right: "prev today next" },
+  headerToolbar: {
+    left: "title",
+    center: "",
+    right: "dayGridMonth,multiMonthYear prev today next",
+  },
+  buttonText: { dayGridMonth: "月", multiMonthYear: "年" },
+  multiMonthMaxColumns: 3,
   fixedWeekCount: false,
   dayMaxEvents: true,
   dayHeaderFormat: { weekday: "short" },
