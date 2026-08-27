@@ -11,6 +11,8 @@ export const useTaskStore = defineStore("tasks", {
     tasks: [] as Task[],
     completions: new Set<string>(),
     ready: false,
+    /** 数据层初始化错误（诊断用） */
+    initError: "",
     /** 响应式的“今天”：应用常驻运行时跨零点自动滚动 */
     currentDate: today(),
   }),
@@ -40,10 +42,14 @@ export const useTaskStore = defineStore("tasks", {
 
   actions: {
     async init() {
-      await repo.init();
-      this.tasks = await repo.listTasks();
-      this.completions = await repo.listCompletions();
-      this.ready = true;
+      try {
+        await repo.init();
+        this.tasks = await repo.listTasks();
+        this.completions = await repo.listCompletions();
+        this.ready = true;
+      } catch (e) {
+        this.initError = String(e);
+      }
       this.startDateClock();
     },
 

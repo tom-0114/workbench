@@ -78,6 +78,17 @@ async function submitInboxAdd() {
 
 /* 开机自启（设置弹层内） */
 const autostartEnabled = ref(false);
+const dataDir = ref("");
+onMounted(async () => {
+  if (isTauri) {
+    try {
+      const { appConfigDir } = await import("@tauri-apps/api/path");
+      dataDir.value = await appConfigDir();
+    } catch (e) {
+      dataDir.value = `获取失败: ${String(e)}`;
+    }
+  }
+});
 async function toggleAutostart() {
   if (!isTauri) return;
   const auto = await import("@tauri-apps/plugin-autostart");
@@ -369,6 +380,17 @@ onBeforeUnmount(() => draggable?.destroy());
             <p v-if="updateError" class="mt-1 text-[11px]" style="color: #ff3b30">
               {{ updateError }}
             </p>
+
+            <div class="my-2.5 border-t" style="border-color: var(--border-subtle)" />
+
+            <!-- 诊断信息 -->
+            <div class="space-y-1 text-[11px]" style="color: var(--text-tertiary)">
+              <div>已加载任务：{{ store.tasks.length }} 条</div>
+              <div class="break-all">数据目录：{{ dataDir || "…" }}</div>
+              <div v-if="store.initError" style="color: #ff3b30" class="break-all">
+                数据层错误：{{ store.initError }}
+              </div>
+            </div>
           </template>
           <div v-else class="text-[12px]" style="color: var(--text-tertiary)">
             浏览器预览模式，数据存 localStorage
