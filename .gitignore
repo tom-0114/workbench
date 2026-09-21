@@ -8,3 +8,8 @@ src-tauri/gen/schemas/
 # 签名私钥绝不入库
 *.key
 *.key.pub
+
+# 本机密钥与日志不入库
+.env
+server/.env
+*.log

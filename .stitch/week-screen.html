@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>个人工作台 - 周列表</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "bg-primary": "#FFFFFF",
+                        "outline-variant": "#c1c6d7",
+                        "on-primary": "#ffffff",
+                        "on-secondary-fixed-variant": "#474649",
+                        "hover-overlay": "rgba(0,0,0,0.035)",
+                        "on-primary-fixed-variant": "#004493",
+                        "secondary-fixed-dim": "#c8c6c8",
+                        "surface-container-lowest": "#ffffff",
+                        "on-tertiary-fixed-variant": "#7c2e00",
+                        "surface-container-high": "#e8e8e9",
+                        "tertiary": "#9e3d00",
+                        "secondary-container": "#e2dfe1",
+                        "on-secondary": "#ffffff",
+                        "surface": "#f9f9fa",
+                        "text-tertiary": "#98989D",
+                        "background": "#f9f9fa",
+                        "on-primary-container": "#fefcff",
+                        "on-tertiary-fixed": "#351000",
+                        "selected-overlay": "rgba(0,0,0,0.055)",
+                        "inverse-on-surface": "#f0f1f2",
+                        "on-surface": "#1a1c1d",
+                        "inverse-surface": "#2f3132",
+                        "on-secondary-container": "#636264",
+                        "tertiary-fixed-dim": "#ffb595",
+                        "tertiary-fixed": "#ffdbcc",
+                        "surface-tint": "#005bc1",
+                        "primary-fixed": "#d8e2ff",
+                        "on-background": "#1a1c1d",
+                        "on-tertiary-container": "#fffbff",
+                        "error": "#ba1a1a",
+                        "tertiary-container": "#c64f00",
+                        "primary": "#0058bc",
+                        "surface-variant": "#e2e2e3",
+                        "on-error-container": "#93000a",
+                        "on-error": "#ffffff",
+                        "surface-container-low": "#f3f3f4",
+                        "surface-bright": "#f9f9fa",
+                        "surface-dim": "#dadadb",
+                        "error-container": "#ffdad6",
+                        "secondary-fixed": "#e4e2e4",
+                        "secondary": "#5f5e60",
+                        "text-secondary": "#6E6E73",
+                        "primary-fixed-dim": "#adc6ff",
+                        "primary-container": "#0070eb",
+                        "on-surface-variant": "#414755",
+                        "outline": "#717786",
+                        "inverse-primary": "#adc6ff",
+                        "surface-container-highest": "#e2e2e3",
+                        "surface-container": "#eeeeef",
+                        "border-subtle": "#ECECEE",
+                        "on-primary-fixed": "#001a41",
+                        "on-secondary-fixed": "#1b1b1d",
+                        "on-tertiary": "#ffffff"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    spacing: {
+                        "md": "12px",
+                        "grid-gutter": "1px",
+                        "sm": "8px",
+                        "xl": "24px",
+                        "sidebar-px": "20px",
+                        "lg": "16px",
+                        "xs": "4px"
+                    },
+                    fontFamily: {
+                        "sidebar-title": ["Inter", "sans-serif"],
+                        "caption": ["Inter", "sans-serif"],
+                        "todo-item": ["Inter", "sans-serif"],
+                        "month-title": ["Inter", "sans-serif"],
+                        "calendar-day": ["Inter", "sans-serif"],
+                        "tiny-label": ["Inter", "sans-serif"]
+                    },
+                    fontSize: {
+                        "sidebar-title": ["26px", { lineHeight: "32px", letterSpacing: "-0.02em", fontWeight: "600" }],
+                        "caption": ["12px", { lineHeight: "16px", fontWeight: "400" }],
+                        "todo-item": ["14px", { lineHeight: "20px", fontWeight: "400" }],
+                        "month-title": ["19px", { lineHeight: "24px", fontWeight: "600" }],
+                        "calendar-day": ["13px", { lineHeight: "16px", fontWeight: "500" }],
+                        "tiny-label": ["11px", { lineHeight: "14px", letterSpacing: "0.01em", fontWeight: "500" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: #FFFFFF;
+        }
+        .mac-checkbox {
+            appearance: none;
+            width: 15px;
+            height: 15px;
+            border: 1.5px solid #c1c6d7;
+            border-radius: 50%;
+            outline: none;
+            cursor: pointer;
+            position: relative;
+            background-color: transparent;
+            transition: all 0.15s ease-out;
+        }
+        .mac-checkbox:checked {
+            background-color: #0070eb;
+            border-color: #0070eb;
+        }
+        .mac-checkbox:checked::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 7px;
+            height: 4.5px;
+            border: 1.5px solid white;
+            border-top: none;
+            border-right: none;
+            transform: rotate(-45deg);
+        }
+        .segmented-control {
+            background-color: #F2F2F3;
+            border-radius: 7px;
+            padding: 2px;
+            display: inline-flex;
+        }
+        .segment-btn {
+            padding: 2px 12px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #1a1c1d;
+            border-radius: 5px;
+            cursor: pointer;
+            user-select: none;
+            transition: background-color 0.15s, box-shadow 0.15s;
+        }
+        .segment-btn.active {
+            background-color: #FFFFFF;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 1px 2px rgba(0,0,0,0.06);
+        }
+        .mac-toolbar-btn {
+            height: 28px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #1a1c1d;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.15s;
+            font-size: 13px;
+            padding: 0 8px;
+        }
+        .mac-toolbar-btn:hover {
+            background-color: rgba(0,0,0,0.05);
+        }
+        .icon-btn {
+            width: 28px;
+            padding: 0;
+        }
+    </style>
+</head>
+<body class="flex h-screen overflow-hidden text-on-surface antialiased bg-bg-primary">
+<!-- SideNavBar -->
+<nav class="h-screen w-[260px] md:w-80 flex-shrink-0 flex flex-col py-xl px-sidebar-px bg-surface-container-low dark:bg-surface-dim border-r border-border-subtle dark:border-outline-variant">
+<div class="mb-8">
+<h1 class="font-sidebar-title text-sidebar-title text-on-surface dark:text-inverse-on-surface">个人工作台</h1>
+<p class="font-caption text-caption text-text-secondary mt-1">专注模式</p>
+</div>
+<ul class="flex flex-col gap-1 flex-grow">
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded-xl text-text-secondary dark:text-text-tertiary hover:bg-hover-overlay dark:hover:bg-hover-overlay transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">today</span>
+<span class="font-todo-item text-todo-item">今日</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded-xl text-text-secondary dark:text-text-tertiary hover:bg-hover-overlay dark:hover:bg-hover-overlay transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">checklist</span>
+<span class="font-todo-item text-todo-item">待办</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded-xl bg-selected-overlay dark:bg-selected-overlay text-on-surface dark:text-inverse-on-surface font-medium scale-[0.98] transition-transform duration-150" href="#">
+<span class="material-symbols-outlined text-[20px]">calendar_month</span>
+<span class="font-todo-item text-todo-item">日历</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded-xl text-text-secondary dark:text-text-tertiary hover:bg-hover-overlay dark:hover:bg-hover-overlay transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">folder_open</span>
+<span class="font-todo-item text-todo-item">项目</span>
+</a>
+</li>
+<li>
+<a class="flex items-center gap-3 px-3 py-2 rounded-xl text-text-secondary dark:text-text-tertiary hover:bg-hover-overlay dark:hover:bg-hover-overlay transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-[20px]">archive</span>
+<span class="font-todo-item text-todo-item">归档</span>
+</a>
+</li>
+</ul>
+<button class="mt-auto flex items-center justify-center gap-2 w-full py-2 rounded-lg text-primary dark:text-primary-fixed-dim hover:bg-hover-overlay transition-colors duration-200 font-todo-item text-todo-item border border-transparent hover:border-border-subtle">
+<span class="material-symbols-outlined text-[18px]">add</span>
+            新建任务
+        </button>
+</nav>
+<!-- Main Content Area -->
+<main class="flex-1 flex flex-col min-w-0 bg-bg-primary">
+<!-- Top Toolbar -->
+<header class="h-14 flex items-center justify-between px-6 border-b border-border-subtle flex-shrink-0 z-10 sticky top-0 bg-bg-primary">
+<div>
+<h2 class="font-month-title text-month-title text-on-surface tracking-tight">9月7日 – 9月13日</h2>
+</div>
+<div class="flex items-center gap-4">
+<!-- Segmented Control: View -->
+<div class="segmented-control">
+<div class="segment-btn active">周</div>
+<div class="segment-btn">月</div>
+<div class="segment-btn">年</div>
+</div>
+<!-- Navigation -->
+<div class="flex items-center gap-1 segmented-control bg-[#F2F2F3] rounded-[7px] p-[2px]">
+<button class="mac-toolbar-btn icon-btn"><span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'wght' 300;">chevron_left</span></button>
+<button class="mac-toolbar-btn">今天</button>
+<button class="mac-toolbar-btn icon-btn"><span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'wght' 300;">chevron_right</span></button>
+</div>
+</div>
+</header>
+<!-- Week List View -->
+<div class="flex-1 overflow-y-auto px-6 py-4">
+<div class="max-w-4xl mx-auto flex flex-col pb-12">
+<!-- Sept 7 -->
+<div class="mb-6">
+<div class="flex items-baseline gap-2 h-9 border-b border-border-subtle mb-1">
+<span class="font-calendar-day text-calendar-day text-on-surface">9月7日</span>
+<span class="font-caption text-caption text-text-tertiary">周一</span>
+</div>
+<div class="flex items-center gap-3 px-2 py-[10px] hover:bg-hover-overlay rounded-lg group transition-colors duration-150 border-b border-border-subtle/50 last:border-0">
+<input class="mac-checkbox flex-shrink-0" type="checkbox"/>
+<span class="font-todo-item text-todo-item text-on-surface flex-1 flex items-center gap-2">团队周会 <span class="material-symbols-outlined text-[14px] text-text-tertiary">refresh</span></span>
+</div>
+</div>
+<!-- Sept 8 -->
+<div class="mb-6 opacity-60 hover:opacity-100 transition-opacity">
+<div class="flex items-baseline gap-2 h-9 border-b border-border-subtle mb-1">
+<span class="font-calendar-day text-calendar-day text-on-surface">9月8日</span>
+<span class="font-caption text-caption text-text-tertiary">周二</span>
+</div>
+<!-- Empty State implied by absence of items, keeping it minimal -->
+</div>
+<!-- Sept 9 -->
+<div class="mb-6">
+<div class="flex items-baseline gap-2 h-9 border-b border-border-subtle mb-1">
+<span class="font-calendar-day text-calendar-day text-on-surface">9月9日</span>
+<span class="font-caption text-caption text-text-tertiary">周三</span>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-3 px-2 py-[10px] hover:bg-hover-overlay rounded-lg group transition-colors duration-150 border-b border-border-subtle/50">
+<input class="mac-checkbox flex-shrink-0" type="checkbox"/>
+<span class="font-todo-item text-todo-item text-on-surface flex-1">回复评审意见</span>
+</div>
+<div class="flex items-center gap-3 px-2 py-[10px] hover:bg-hover-overlay rounded-lg group transition-colors duration-150 border-b border-border-subtle/50 last:border-0">
+<input class="mac-checkbox flex-shrink-0" type="checkbox"/>
+<span class="font-todo-item text-todo-item text-on-surface flex-1">整理周报</span>
+</div>
+</div>
+</div>
+<!-- Sept 10 -->
+<div class="mb-6 opacity-60 hover:opacity-100 transition-opacity">
+<div class="flex items-baseline gap-2 h-9 border-b border-border-subtle mb-1">
+<span class="font-calendar-day text-calendar-day text-on-surface">9月10日</span>
+<span class="font-caption text-caption text-text-tertiary">周四</span>
+</div>
+</div>
+<!-- Sept 11 -->
+<div class="mb-6">
+<div class="flex items-baseline gap-2 h-9 border-b border-border-subtle mb-1">
+<span class="font-calendar-day text-calendar-day text-on-surface">9月11日</span>
+<span class="font-caption text-caption text-text-tertiary">周五</span>
+</div>
+<div class="flex items-center gap-3 px-2 py-[10px] hover:bg-hover-overlay rounded-lg group transition-colors duration-150 border-b border-border-subtle/50 last:border-0">
+<input class="mac-checkbox flex-shrink-0" type="checkbox"/>
+<span class="font-todo-item text-todo-item text-on-surface flex-1">版本发布</span>
+</div>
+</div>
+<!-- Sept 12 -->
+<div class="mb-6 opacity-60 hover:opacity-100 transition-opacity">
+<div class="flex items-baseline gap-2 h-9 border-b border-border-subtle mb-1 text-primary">
+<span class="font-calendar-day text-calendar-day">9月12日</span>
+<span class="font-caption text-caption opacity-80">周六</span>
+</div>
+</div>
+<!-- Sept 13 -->
+<div class="mb-6 opacity-60 hover:opacity-100 transition-opacity">
+<div class="flex items-baseline gap-2 h-9 border-b border-border-subtle mb-1 text-primary">
+<span class="font-calendar-day text-calendar-day">9月13日</span>
+<span class="font-caption text-caption opacity-80">周日</span>
+</div>
+</div>
+</div>
+</div>
+</main>
+<script>
+        // Simple script to handle segmented control visual state for demo purposes
+        document.querySelectorAll('.segmented-control').forEach(control => {
+            const btns = control.querySelectorAll('.segment-btn');
+            if(btns.length > 0) {
+                btns.forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        btns.forEach(b => b.classList.remove('active'));
+                        e.target.classList.add('active');
+                    });
+                });
+            }
+        });
+    </script>
+</body></html>

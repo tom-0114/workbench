@@ -1,0 +1,1 @@
+{"jsonrpc": "2.0", "id": 12, "method": "tools/call", "params": {"name": "create_project", "arguments": {"title": "Workbench \u4e2a\u4eba\u5de5\u4f5c\u53f0"}}}

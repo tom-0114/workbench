@@ -113,8 +113,379 @@
     text-rendering: optimizeLegibility;
   }
   button {
-    cursor: default;
+    cursor: pointer;
   }
+  button:disabled {
+    cursor: not-allowed;
+  }
+}
+
+.wb-app-shell {
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* =========================================================
+   登录与全局状态：延续工作台的克制蓝灰视觉
+   ========================================================= */
+.wb-login-shell,
+.wb-state-page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--bg-secondary);
+}
+
+.wb-login-shell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: 40px 24px;
+}
+
+.wb-login-shell::before {
+  position: absolute;
+  inset: 20px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 18px;
+  content: "";
+  pointer-events: none;
+}
+
+.wb-login-panel {
+  position: relative;
+  z-index: 1;
+  width: min(410px, 100%);
+  padding: 38px 36px 32px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 16px;
+  background: var(--bg-primary);
+  box-shadow: 0 18px 50px rgba(29, 29, 31, 0.08);
+}
+
+.wb-login-date {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 36px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.wb-login-date > span {
+  color: var(--accent-color);
+  font-size: 48px;
+  font-weight: 650;
+  letter-spacing: -0.06em;
+  line-height: 0.8;
+}
+
+.wb-login-date i {
+  width: 42px;
+  height: 1px;
+  background: var(--border-subtle);
+}
+
+.wb-login-heading {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wb-login-heading h1 {
+  font-size: 25px;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+}
+
+.wb-login-heading p {
+  margin-bottom: 2px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  font-weight: 550;
+}
+
+.wb-login-mark {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 9px;
+  background: var(--accent-color);
+  color: #fff;
+}
+
+.wb-login-mark svg {
+  width: 18px;
+  height: 18px;
+}
+
+.wb-login-intro {
+  margin: 10px 0 26px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.wb-login-form,
+.wb-login-field {
+  display: grid;
+}
+
+.wb-login-form {
+  gap: 18px;
+}
+
+.wb-login-field {
+  gap: 7px;
+}
+
+.wb-login-field label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.wb-login-field input {
+  min-height: 44px;
+}
+
+.wb-login-form button[type="submit"] {
+  min-height: 44px;
+  margin-top: 2px;
+}
+
+.wb-login-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--destructive) 24%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--destructive) 7%, var(--bg-primary));
+  color: var(--destructive);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.wb-login-error:focus {
+  outline: 2px solid color-mix(in srgb, var(--destructive) 24%, transparent);
+  outline-offset: 2px;
+}
+
+.wb-login-error > span {
+  display: grid;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--destructive);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.wb-login-footnote {
+  margin-top: 24px;
+  color: var(--text-tertiary);
+  font-size: 11px;
+  text-align: center;
+}
+
+.wb-state-page {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: 24px;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.wb-state-page > svg,
+.wb-state-icon {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 8px;
+  color: var(--accent-color);
+}
+
+.wb-state-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.wb-state-page strong {
+  color: var(--text-primary);
+  font-size: 17px;
+}
+
+.wb-state-page > span:not(.wb-state-icon) {
+  max-width: 360px;
+  font-size: 13px;
+}
+
+.wb-state-page button {
+  min-height: 42px;
+  margin-top: 10px;
+}
+
+.wb-operation-error {
+  position: fixed;
+  z-index: 80;
+  right: 20px;
+  bottom: 20px;
+  display: flex;
+  width: min(390px, calc(100vw - 32px));
+  min-height: 48px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px 10px 14px;
+  border: 1px solid color-mix(in srgb, var(--destructive) 20%, transparent);
+  border-radius: 10px;
+  background: var(--bg-primary);
+  box-shadow: 0 10px 32px rgba(29, 29, 31, 0.14);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.wb-operation-error > svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--destructive);
+}
+
+.wb-operation-error span {
+  flex: 1;
+}
+
+.wb-operation-error button {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: none;
+  place-items: center;
+  border-radius: 8px;
+  color: var(--text-secondary);
+}
+
+.wb-operation-error button:hover {
+  background: var(--hover);
+}
+
+.wb-operation-error button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.wb-calendar-add {
+  position: absolute;
+  z-index: 25;
+  right: 18px;
+  bottom: 18px;
+  display: none;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--accent-color);
+  box-shadow: 0 8px 22px rgba(0, 122, 255, 0.28);
+  color: #fff;
+}
+
+.wb-calendar-add:active {
+  transform: scale(0.96);
+}
+
+.wb-calendar-add svg {
+  width: 22px;
+  height: 22px;
+}
+
+.wb-calendar-add span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.wb-calendar {
+  position: relative;
+}
+
+body [data-slot="dialog-overlay"] {
+  background: rgba(20, 20, 24, 0.2);
+  backdrop-filter: blur(2px);
+}
+
+.wb-task-dialog {
+  border-radius: 14px;
+  box-shadow:
+    0 22px 70px rgba(29, 29, 31, 0.2),
+    0 2px 8px rgba(29, 29, 31, 0.08);
+}
+
+.wb-task-dialog > [data-slot="dialog-close"] {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 8px;
+}
+
+.wb-task-dialog > [data-slot="dialog-close"]:hover {
+  background: var(--hover);
+}
+
+.wb-mobile-nav {
+  display: flex;
+  flex: none;
+  align-items: stretch;
+  justify-content: space-around;
+  gap: 8px;
+  min-height: calc(58px + env(safe-area-inset-bottom));
+  padding: 5px 12px env(safe-area-inset-bottom);
+  border-top: 1px solid var(--border-subtle);
+  background: color-mix(in srgb, var(--bg-primary) 94%, transparent);
+  backdrop-filter: blur(18px);
+}
+
+.wb-mobile-nav button {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 10px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 500;
+  touch-action: manipulation;
+}
+
+.wb-mobile-nav button.is-active {
+  background: transparent;
+  color: var(--accent-color);
+}
+
+.wb-mobile-nav button:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: -2px;
+}
+
+.wb-mobile-nav svg {
+  width: 20px;
+  height: 20px;
 }
 
 /* =========================================================
@@ -133,6 +504,182 @@
 }
 .wb-item.wb-item-done {
   opacity: 0.55;
+}
+.wb-item.wb-item-done:hover,
+.wb-item.wb-item-done:focus-within {
+  opacity: 0.78;
+}
+
+.wb-sidebar-row {
+  position: relative;
+  min-height: 32px;
+}
+.wb-sidebar-row.is-active {
+  background: var(--hover);
+  opacity: 1;
+}
+.wb-sidebar-row.is-draggable:not(.is-active) {
+  cursor: grab;
+}
+.wb-sidebar-row.is-draggable:not(.is-active):active {
+  cursor: grabbing;
+}
+.wb-sidebar-row[draggable="true"] {
+  user-select: none;
+}
+.wb-sidebar-row[draggable="true"].is-drag-source,
+.wb-event.is-drag-source {
+  opacity: 0.38;
+}
+.wb-sidebar-title {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-primary);
+  font-size: 14px;
+  text-align: left;
+}
+.wb-sidebar-title > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wb-repeat-mark,
+.wb-row-meta {
+  flex: none;
+  color: var(--text-tertiary);
+  font-size: 10px;
+}
+.wb-row-meta {
+  font-size: 11px;
+}
+.wb-row-actions {
+  position: absolute;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-left: 12px;
+  background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease-out;
+}
+.wb-sidebar-row:hover .wb-row-actions,
+.wb-sidebar-row:focus-within .wb-row-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.wb-row-actions button,
+.wb-inline-editor button {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 6px;
+  color: var(--text-tertiary);
+}
+.wb-row-actions button:hover,
+.wb-inline-editor button:hover {
+  background: var(--selected);
+  color: var(--text-primary);
+}
+.wb-row-actions button.is-destructive:hover,
+.wb-inline-delete button.is-destructive {
+  color: var(--destructive);
+}
+.wb-row-actions svg,
+.wb-inline-editor svg {
+  width: 14px;
+  height: 14px;
+}
+.wb-inline-editor {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 3px;
+}
+.wb-inline-editor input {
+  min-width: 0;
+  height: 28px;
+  flex: 1;
+  border: 1px solid var(--accent-color);
+  border-radius: 6px;
+  background: var(--bg-primary);
+  padding: 0 7px;
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent-color) 14%, transparent);
+}
+.wb-inline-editor button.is-save {
+  color: var(--accent-color);
+}
+.wb-inline-delete {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 5px;
+  font-size: 11px;
+}
+.wb-inline-delete > span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wb-inline-delete button {
+  min-height: 26px;
+  padding: 0 7px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+}
+.wb-inline-delete button:hover {
+  background: var(--selected);
+}
+.wb-inline-delete button.is-destructive {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.wb-inline-delete svg {
+  width: 12px;
+  height: 12px;
+}
+
+.wb-recycle-row {
+  color: var(--text-tertiary);
+}
+.wb-recycle-leading {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.wb-recycle-row .wb-sidebar-title {
+  color: var(--text-secondary);
+}
+
+/* PC 原生拖放：整个分区是投放区，激活时再提高强调度。 */
+.wb-drop-zone {
+  border-radius: 8px;
+  transition:
+    background 140ms ease-out,
+    box-shadow 140ms ease-out;
+}
+body.wb-task-dragging .wb-drop-zone {
+  background: color-mix(in srgb, var(--accent-color) 3%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-color) 24%, transparent);
+}
+body.wb-task-dragging .wb-drop-zone.is-drop-active {
+  background: color-mix(in srgb, var(--accent-color) 10%, var(--bg-secondary));
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent-color) 64%, transparent);
 }
 
 /* 圆形完成 checkbox */
@@ -161,17 +708,51 @@
   color: #ffffff;
 }
 
-/* 分区标题 */
+/* 分区标题：轻、安静，像 Reminders 的分组标签 */
 .wb-section {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   padding: 0 8px;
-  margin: 18px 0 4px;
+  margin: 14px 0 4px;
   font-size: 11px;
   font-weight: 500;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   color: var(--text-tertiary);
+}
+
+.wb-section-toggle {
+  width: 100%;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 3px;
+  border-radius: 6px;
+  text-align: left;
+}
+.wb-section-toggle:hover {
+  color: var(--text-secondary);
+}
+.wb-section-toggle > svg {
+  width: 10px;
+  height: 10px;
+  opacity: 0.75;
+  transition: transform 150ms ease-out;
+}
+.wb-section-toggle > svg.is-open {
+  transform: rotate(90deg);
+}
+.wb-section-count {
+  margin-left: auto;
+}
+.wb-today-panel [data-slot="collapsible-content"][data-state="open"] {
+  animation: wb-section-in 140ms ease-out;
+}
+
+@keyframes wb-section-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
 }
 
 /* 侧边栏优先级小圆点 */
@@ -180,6 +761,42 @@
   width: 6px;
   height: 6px;
   border-radius: 999px;
+}
+
+/* 自然语言识别预览（输入行右侧） */
+.wb-nl-hint {
+  flex: none;
+  color: var(--accent-color);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* 完成勾选的轻量 pop（仅点击瞬间，120-220ms 量级） */
+@keyframes wb-check-pop {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.22);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.wb-check.wb-pop,
+.wb-event-check.wb-pop {
+  animation: wb-check-pop 200ms ease-out;
+}
+
+/* 今天徽章出现时轻轻放大 */
+@keyframes wb-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+.wb-calendar .fc .fc-day-today .wb-daynum {
+  animation: wb-pop-in 240ms ease-out;
 }
 
 /* =========================================================
@@ -209,30 +826,37 @@
   border: none;
   box-shadow: none !important;
   color: var(--text-secondary);
-  padding: 3px 9px;
-  border-radius: var(--radius-sm);
+  padding: 3px 10px;
+  border-radius: 5px;
   font-size: 13px;
   font-weight: 500;
   transition:
     background 150ms ease-out,
-    color 150ms ease-out;
+    color 150ms ease-out,
+    box-shadow 150ms ease-out;
 }
 .wb-calendar .fc .fc-button:hover {
-  background: var(--hover);
+  background: rgba(0, 0, 0, 0.045);
   color: var(--text-primary);
 }
-.wb-calendar .fc .fc-button:active,
-.wb-calendar .fc .fc-button:focus {
+.wb-calendar .fc .fc-button:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-color) 40%, transparent);
+  outline-offset: 1px;
+}
+.wb-calendar .fc .fc-button:not(.fc-button-active):not(.fc-today-button):not(:disabled):active {
   background: var(--selected);
-  box-shadow: none !important;
 }
 .wb-calendar .fc .fc-today-button {
-  background: var(--secondary);
+  background: var(--bg-primary);
   color: var(--text-primary);
+  box-shadow:
+    0 0 0 1px var(--border-subtle),
+    0 1px 2px rgba(0, 0, 0, 0.06) !important;
 }
 .wb-calendar .fc .fc-today-button:disabled {
   background: transparent;
   color: var(--text-tertiary);
+  box-shadow: none !important;
   opacity: 1;
 }
 .wb-calendar .fc .fc-icon {
@@ -240,7 +864,10 @@
   vertical-align: -0.1em;
 }
 .wb-calendar .fc .fc-button-group {
-  gap: 2px;
+  gap: 0;
+  padding: 2px;
+  border-radius: 7px;
+  background: var(--secondary);
 }
 
 /* 视图区留白 */
@@ -351,9 +978,9 @@
 .wb-event {
   display: flex !important;
   align-items: center;
-  gap: 6px;
-  padding: 2px 6px;
-  margin: 0 4px 1px;
+  gap: 5px;
+  padding: 1px 5px;
+  margin: 0 2px;
   border-radius: var(--radius-sm);
   background: transparent;
   cursor: pointer;
@@ -363,22 +990,56 @@
 .wb-event:hover {
   background: var(--hover);
 }
-.wb-event .wb-dot {
-  flex: none;
-  width: 9px;
-  height: 9px;
-  border-radius: 999px;
-  border: 1.5px solid var(--dot-color, #c7c7cc);
-  box-sizing: border-box;
-  transition: background 150ms ease-out;
+.wb-event[draggable="true"] {
+  cursor: grab;
+  user-select: none;
 }
-.wb-event.wb-done .wb-dot {
+.wb-event[draggable="true"]:active {
+  cursor: grabbing;
+}
+.wb-calendar .fc .wb-native-drop-active.fc-daygrid-day .fc-daygrid-day-frame,
+.wb-calendar .fc .wb-native-drop-active[data-wb-drop-date] {
+  background: color-mix(in srgb, var(--accent-color) 11%, var(--bg-primary));
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent-color) 62%, transparent);
+}
+.wb-event-content {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+}
+.wb-event .wb-event-check {
+  display: grid;
+  flex: none;
+  width: 13px;
+  height: 13px;
+  place-items: center;
+  border-radius: 999px;
+  border: 1.25px solid var(--dot-color, #c7c7cc);
+  box-sizing: border-box;
+  color: transparent;
+  font-size: 8px;
+  line-height: 1;
+  transition:
+    background 150ms ease-out,
+    border-color 150ms ease-out;
+}
+.wb-event .wb-event-check:hover {
+  border-color: var(--accent-color);
+}
+.wb-event .wb-event-check:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-color) 38%, transparent);
+  outline-offset: 1px;
+}
+.wb-event.wb-done .wb-event-check {
   background: var(--dot-color, #c7c7cc);
+  color: #fff;
 }
 .wb-event .wb-title {
   flex: 1;
   min-width: 0;
-  font-size: 12px;
+  font-size: 11.5px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -446,14 +1107,118 @@
 .wb-calendar .fc .fc-multimonth .wb-event .wb-title {
   font-size: 10.5px;
 }
-.wb-calendar .fc .fc-multimonth .wb-event .wb-dot {
-  width: 7px;
-  height: 7px;
+.wb-calendar .fc .fc-multimonth .wb-event .wb-event-check {
+  width: 13px;
+  height: 13px;
 }
-/* 视图切换按钮选中态 */
+/* 视图切换按钮选中态：分段控件中的白色凸起段 */
 .wb-calendar .fc .fc-button.fc-button-active {
-  background: var(--selected);
+  background: var(--bg-primary);
   color: var(--text-primary);
+  box-shadow:
+    0 0 0 1px var(--border-subtle),
+    0 1px 2px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* =========================================================
+   周列表（listWeek）：Apple Reminders 风格分组列表
+   行结构：tr.fc-list-event > td.fc-list-event-title > span.wb-event-content
+   ========================================================= */
+.wb-calendar .fc {
+  --fc-list-event-hover-bg-color: transparent;
+}
+.wb-calendar .fc .fc-list {
+  border: none;
+}
+/* 日分组头：日期加重、星期变灰；今天的分组用主色强调 */
+.wb-calendar .fc .fc-list-day {
+  background: var(--bg-primary);
+}
+.wb-calendar .fc .fc-list-day-cushion {
+  background: transparent;
+  padding: 18px 4px 6px;
+  align-items: baseline;
+}
+.wb-calendar .fc .fc-list-day-text {
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.wb-calendar .fc .fc-list-day-side-text {
+  color: var(--text-tertiary);
+  font-size: 12px;
+  font-weight: 500;
+  text-decoration: none;
+}
+.wb-calendar .fc .fc-list-day.wb-list-today .fc-list-day-text {
+  color: var(--accent-color);
+}
+.wb-calendar .fc .fc-list-day.wb-list-today .fc-list-day-side-text {
+  color: var(--accent-color);
+  opacity: 0.75;
+}
+/* 事件行：无分隔线，靠分组留白与字重分层；hover 只在行容器上 */
+.wb-calendar .fc .fc-list-event.wb-event {
+  display: table-row !important;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+}
+.wb-calendar .fc .fc-list-event:hover {
+  background: transparent;
+}
+.wb-calendar .fc .fc-list-event-time,
+.wb-calendar .fc .fc-list-event-graphic {
+  display: none;
+}
+.wb-calendar .fc .fc-list-event-title {
+  padding: 0 10px;
+  border-bottom: none;
+}
+.wb-calendar .fc .fc-list-event .wb-event-content {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 150ms ease-out;
+}
+.wb-calendar .fc .fc-list-event .wb-event-content:hover {
+  background: var(--hover);
+}
+.wb-calendar .fc .fc-list-event-title .wb-event-check {
+  width: 17px;
+  height: 17px;
+  border-width: 1.5px;
+}
+.wb-calendar .fc .fc-list-event-title .wb-title {
+  flex: 1;
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--text-primary);
+}
+/* 已完成：紧凑 + 降透明，让未完成事项主导视觉 */
+.wb-calendar .fc .fc-list-event.wb-done {
+  opacity: 1;
+}
+.wb-calendar .fc .fc-list-event.wb-done .wb-event-content {
+  min-height: 32px;
+  padding: 2px 8px;
+  opacity: 0.45;
+}
+.wb-calendar .fc .fc-list-event.wb-done .wb-event-content .wb-title {
+  text-decoration: line-through;
+}
+.wb-calendar .fc .fc-list-empty-cushion {
+  color: var(--text-tertiary);
+  font-size: 13px;
 }
 
 /* =========================================================
@@ -473,4 +1238,1085 @@
 .wb-calendar .fc .fc-day-other.wb-holiday,
 .wb-calendar .fc .fc-day-other.wb-workday {
   background: rgba(0, 0, 0, 0.018);
+}
+
+@media (max-width: 767px) {
+  html,
+  body,
+  #app {
+    height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  button,
+  a,
+  input,
+  textarea,
+  [role="button"] {
+    touch-action: manipulation;
+  }
+
+  .wb-login-shell {
+    place-items: stretch;
+    padding: max(20px, env(safe-area-inset-top)) 16px max(20px, env(safe-area-inset-bottom));
+  }
+
+  .wb-login-shell::before {
+    display: none;
+  }
+
+  .wb-login-panel {
+    width: 100%;
+    margin: auto 0;
+    padding: 30px 24px 26px;
+    box-shadow: 0 12px 34px rgba(29, 29, 31, 0.07);
+  }
+
+  .wb-login-date {
+    margin-bottom: 30px;
+  }
+
+  .wb-login-date > span {
+    font-size: 44px;
+  }
+
+  .wb-login-heading h1 {
+    font-size: 23px;
+  }
+
+  .wb-login-field input {
+    font-size: 16px;
+  }
+
+  .wb-calendar-add {
+    display: inline-flex;
+    width: 44px;
+    height: 44px;
+    bottom: calc(env(safe-area-inset-bottom) + 12px);
+    box-shadow: 0 4px 14px rgba(0, 122, 255, 0.22);
+  }
+
+  .wb-operation-error {
+    right: 16px;
+    bottom: calc(70px + env(safe-area-inset-bottom));
+  }
+
+  .wb-today-panel .wb-item {
+    min-height: 48px;
+    gap: 11px;
+    padding: 8px;
+  }
+
+  .wb-today-panel .wb-check {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+
+  .wb-row-actions {
+    position: static;
+    padding-left: 0;
+    background: transparent;
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .wb-row-actions button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .wb-section-toggle {
+    min-height: 44px;
+  }
+
+  .wb-today-panel .wb-icon-button {
+    display: inline-flex;
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .wb-today-panel input,
+  .wb-task-dialog input,
+  .wb-task-dialog textarea,
+  .wb-task-sheet input,
+  .wb-task-sheet textarea,
+  .wb-quick-add input {
+    font-size: 16px;
+  }
+
+  .wb-today-panel > div:first-child {
+    padding-top: max(18px, env(safe-area-inset-top));
+  }
+
+  .wb-today-panel > div:last-child {
+    min-height: 48px;
+    border-top: none;
+  }
+
+  /* 移动端任务编辑抽屉（shadcn Sheet bottom） */
+  .wb-task-sheet {
+    max-height: 92dvh;
+    border-radius: 14px 14px 0 0;
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* 单行紧凑工具栏：标题（可截断）+ 两组分段控件 */
+  .wb-calendar .fc .fc-header-toolbar {
+    flex-wrap: nowrap;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 6px;
+    padding: max(10px, env(safe-area-inset-top)) 12px 0;
+  }
+
+  .wb-calendar .fc .fc-header-toolbar .fc-toolbar-chunk:first-child {
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: flex-start;
+  }
+
+  .wb-calendar .fc .fc-toolbar-chunk {
+    flex: none;
+  }
+
+  .wb-calendar .fc .fc-toolbar-title {
+    overflow: hidden;
+    font-size: 17px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .wb-calendar .fc .fc-button {
+    min-width: 0;
+    min-height: 32px;
+    padding: 0 10px;
+    font-size: 12.5px;
+    touch-action: manipulation;
+  }
+
+  .wb-calendar .fc .fc-today-button {
+    min-width: 44px;
+  }
+
+  .wb-calendar .fc .fc-view-harness {
+    margin: 0 8px 8px;
+  }
+
+  .wb-calendar .fc .fc-list-event-title {
+    padding: 0 4px;
+  }
+
+  /* 周视图（移动端）：44px 触控行、20px 圈、更明显的分组呼吸 */
+  .wb-calendar .fc .fc-list-day-cushion {
+    padding: 20px 4px 6px;
+  }
+
+  .wb-calendar .fc .fc-list-day-text {
+    font-size: 15px;
+  }
+
+  .wb-calendar .fc .fc-list-event .wb-event-content {
+    min-height: 44px;
+    gap: 12px;
+    padding: 8px;
+  }
+
+  .wb-calendar .fc .fc-list-event-title .wb-event-check {
+    width: 20px;
+    height: 20px;
+  }
+
+  .wb-calendar .fc .fc-list-event-title .wb-title {
+    font-size: 15px;
+  }
+
+  .wb-calendar .fc .fc-list-event.wb-done .wb-event-content {
+    min-height: 34px;
+    padding: 4px 8px;
+  }
+
+  .wb-calendar .fc .fc-daygrid-day-top {
+    padding: 2px 1px 0;
+  }
+
+  .wb-calendar .fc .fc-daygrid-day-number {
+    max-width: 100%;
+    gap: 1px;
+    padding: 2px 1px;
+  }
+
+  .wb-calendar .fc .fc-daygrid-day-number .wb-daynum {
+    min-width: 24px;
+    height: 24px;
+    font-size: 12px;
+  }
+
+  .wb-calendar .fc .fc-day-today .wb-daynum {
+    width: 24px;
+    min-width: 24px;
+  }
+
+  .wb-calendar .fc .wb-day-badge {
+    max-width: 30px;
+    overflow: hidden;
+    padding: 2px;
+    font-size: 8px;
+    text-overflow: ellipsis;
+  }
+
+  .wb-calendar .fc .fc-dayGridMonth-view .wb-event {
+    gap: 3px;
+    margin-inline: 1px;
+    padding-inline: 2px;
+  }
+
+  .wb-calendar .fc .fc-dayGridMonth-view .wb-event .wb-event-check {
+    width: 14px;
+    height: 14px;
+  }
+
+  .wb-calendar .fc .fc-dayGridMonth-view .wb-event .wb-title {
+    font-size: 10px;
+  }
+
+  .wb-task-dialog {
+    width: calc(100vw - 24px);
+    max-width: calc(100vw - 24px);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .wb-task-dialog [data-slot="dialog-footer"] button,
+  .wb-task-dialog [data-slot="select-trigger"] {
+    min-height: 44px;
+  }
+
+  .wb-task-dialog > [data-slot="dialog-close"] {
+    display: inline-flex;
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+
+/* =========================================================
+   项目工作台（灵感工坊）：浅灰底 + 双悬浮白面板
+   ========================================================= */
+.wpb-shell {
+  position: relative;
+  width: 100%;
+  padding: 10px;
+  gap: 10px;
+}
+
+.wpb-nav {
+  width: 176px;
+  padding-top: 2px;
+}
+
+.wpb-logo {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  font-size: 17px;
+  background: linear-gradient(135deg, rgba(0, 122, 255, 0.16), rgba(175, 82, 222, 0.14));
+}
+
+.wpb-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  margin-bottom: 2px;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+  transition: background 150ms ease-out, color 150ms ease-out;
+}
+.wpb-nav-item:hover {
+  background: var(--hover);
+}
+.wpb-nav-item.is-active {
+  background: color-mix(in srgb, var(--accent-color) 11%, transparent);
+  color: var(--accent-color);
+  font-weight: 500;
+}
+.wpb-nav-count {
+  min-width: 20px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.wpb-back-calendar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  transition: border-color 150ms ease-out, color 150ms ease-out;
+}
+.wpb-back-calendar:hover {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+
+/* 中间列表 + 右侧详情：两块悬浮白面板 */
+.wpb-list,
+.wpb-detail {
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+
+.wpb-list {
+  width: clamp(360px, 36vw, 530px);
+}
+
+.wpb-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  max-width: 340px;
+  width: 100%;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-secondary);
+  color: var(--text-tertiary);
+}
+.wpb-search:focus-within {
+  border-color: var(--accent-color);
+  background: var(--bg-primary);
+}
+.wpb-search input {
+  min-width: 0;
+  flex: 1;
+  background: transparent;
+  font-size: 12.5px;
+  color: var(--text-primary);
+  outline: none;
+}
+.wpb-search kbd {
+  padding: 1px 5px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 5px;
+  background: var(--bg-primary);
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+
+.wpb-list-title {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.wpb-empty {
+  padding: 28px 0;
+  text-align: center;
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+
+/* 项目卡片 */
+.wpb-card {
+  display: block;
+  padding: 13px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  transition: border-color 150ms ease-out, box-shadow 150ms ease-out, background 150ms ease-out;
+}
+.wpb-card:hover {
+  border-color: color-mix(in srgb, var(--accent-color) 45%, var(--border-subtle));
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
+}
+.wpb-card.is-selected {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 1px var(--accent-color), 0 3px 10px rgba(0, 122, 255, 0.1);
+}
+
+.wpb-icon-tile {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 10px;
+  font-size: 20px;
+}
+.wpb-icon-tile.is-mini {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  font-size: 9px;
+}
+
+.wpb-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 1.5px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.wpb-badge-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: currentColor;
+}
+.wpb-badge.is-active {
+  color: #248a3d;
+  background: rgba(52, 199, 89, 0.14);
+}
+.wpb-badge.is-organizing {
+  color: #c25a00;
+  background: rgba(255, 149, 0, 0.16);
+}
+.wpb-badge.is-done {
+  color: var(--text-secondary);
+  background: var(--secondary);
+}
+.dark .wpb-badge.is-active {
+  color: #30d158;
+}
+.dark .wpb-badge.is-organizing {
+  color: #ff9f0a;
+}
+
+.wpb-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1.5px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent-color) 8%, transparent);
+  color: var(--accent-color);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.wpb-tag.is-ghost {
+  background: transparent;
+  border: 1px dashed var(--border-subtle);
+  color: var(--text-tertiary);
+}
+.wpb-tag.is-ghost:hover:not(:disabled) {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+
+.wpb-stat-card,
+.wpb-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--card);
+}
+.wpb-stat-card strong,
+.wpb-stat strong {
+  font-size: 20px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.wpb-stat-card span,
+.wpb-stat span {
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+}
+
+/* 详情面板 */
+.wpb-back-btn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  margin-top: 5px;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font-size: 15px;
+}
+
+.wpb-fav-btn {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  color: var(--text-tertiary);
+  transition: background 150ms ease-out, color 150ms ease-out;
+}
+.wpb-fav-btn:hover {
+  background: var(--hover);
+}
+.wpb-fav-btn.is-on {
+  color: #e6a700;
+}
+
+.wpb-secondary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 11px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 12.5px;
+  transition: border-color 150ms ease-out, color 150ms ease-out;
+}
+.wpb-secondary-btn:hover:not(:disabled) {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+.wpb-secondary-btn.is-danger:hover:not(:disabled) {
+  border-color: var(--destructive);
+  color: var(--destructive);
+}
+
+.wpb-primary-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 13px;
+  border-radius: 8px;
+  background: var(--accent-color);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 500;
+  transition: opacity 150ms ease-out;
+}
+.wpb-primary-btn:hover:not(:disabled) {
+  opacity: 0.88;
+}
+.wpb-primary-btn:disabled {
+  opacity: 0.45;
+}
+
+.wpb-mini-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 0 7px;
+  flex: none;
+  border-radius: 6px;
+  color: var(--text-tertiary);
+  font-size: 11.5px;
+  transition: background 150ms ease-out, color 150ms ease-out;
+}
+.wpb-mini-btn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--accent-color);
+}
+.wpb-mini-btn.is-danger:hover:not(:disabled) {
+  color: var(--destructive);
+}
+
+.wpb-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 30px;
+  padding: 0 9px;
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 12.5px;
+  text-align: left;
+}
+.wpb-menu-item:hover {
+  background: var(--hover);
+}
+.wpb-menu-item.is-danger {
+  color: var(--destructive);
+}
+.wpb-menu-item.is-current {
+  color: var(--accent-color);
+  font-weight: 500;
+}
+
+.wpb-sort-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 0 9px;
+  border-radius: 7px;
+  color: var(--text-tertiary);
+  font-size: 12px;
+}
+.wpb-sort-btn:hover {
+  background: var(--hover);
+  color: var(--text-secondary);
+}
+
+/* Tabs：下划线式 */
+.wpb-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--border-subtle);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.wpb-tabs::-webkit-scrollbar {
+  display: none;
+}
+.wpb-tabs button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 8px 10px 9px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  white-space: nowrap;
+  transition: color 150ms ease-out;
+}
+.wpb-tabs button:hover {
+  color: var(--text-primary);
+}
+.wpb-tabs button.is-active {
+  color: var(--accent-color);
+  font-weight: 500;
+}
+.wpb-tabs button.is-active::after {
+  content: "";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: -1px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--accent-color);
+}
+.wpb-tab-count {
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--secondary);
+  color: var(--text-tertiary);
+  font-size: 10px;
+  line-height: 15px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 面板（详情内容卡） */
+.wpb-panel {
+  padding: 15px 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: var(--card);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+.wpb-panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.wpb-panel-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 8px;
+  font-size: 15px;
+}
+
+.wpb-field-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.wpb-input,
+.wpb-textarea {
+  display: block;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 150ms ease-out, box-shadow 150ms ease-out;
+}
+.wpb-textarea {
+  resize: vertical;
+  min-height: 64px;
+  line-height: 1.55;
+}
+.wpb-input:focus,
+.wpb-textarea:focus {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-color) 14%, transparent);
+}
+.wpb-input::placeholder,
+.wpb-textarea::placeholder {
+  color: var(--text-tertiary);
+}
+
+.wpb-icon-choice {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  font-size: 15px;
+  transition: background 150ms ease-out, box-shadow 150ms ease-out;
+}
+.wpb-icon-choice:hover {
+  background: var(--hover);
+}
+.wpb-icon-choice.is-picked {
+  background: color-mix(in srgb, var(--accent-color) 12%, transparent);
+  box-shadow: 0 0 0 1.5px var(--accent-color);
+}
+
+.wpb-color-choice {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  transition: box-shadow 150ms ease-out;
+}
+.wpb-color-choice.is-picked {
+  box-shadow: 0 0 0 2px var(--bg-primary), 0 0 0 3.5px var(--accent-color);
+}
+
+/* 分段控件（弹窗状态） */
+.wpb-seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: var(--secondary);
+}
+.wpb-seg button {
+  padding: 3px 10px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  transition: background 150ms ease-out, color 150ms ease-out;
+}
+.wpb-seg button.is-active {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.wpb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-subtle);
+  background: var(--card);
+  color: var(--text-secondary);
+  font-size: 11.5px;
+  white-space: nowrap;
+  transition: border-color 150ms ease-out, color 150ms ease-out, background 150ms ease-out;
+}
+.wpb-chip:hover {
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+}
+.wpb-chip.is-picked {
+  border-color: var(--accent-color);
+  background: color-mix(in srgb, var(--accent-color) 10%, transparent);
+  color: var(--accent-color);
+}
+.wpb-chip-row {
+  scrollbar-width: none;
+}
+.wpb-chip-row::-webkit-scrollbar {
+  display: none;
+}
+
+.wpb-idea-row,
+.wpb-task-row,
+.wpb-file-row,
+.wpb-feed-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  background: var(--bg-primary);
+}
+.wpb-feed-row,
+.wpb-task-row,
+.wpb-file-row {
+  align-items: center;
+}
+.wpb-feed-row button:hover p:first-child {
+  color: var(--accent-color);
+}
+
+.wpb-req-item {
+  padding: 11px 12px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 9px;
+  background: var(--bg-primary);
+}
+
+.wpb-req-field .wpb-req-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 500;
+  margin-bottom: 5px;
+}
+.wpb-req-icon {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: var(--secondary);
+  font-size: 11px;
+}
+
+.wpb-save-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 2px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--card) 92%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.wpb-task-row.is-done .truncate {
+  color: var(--text-tertiary);
+  text-decoration: line-through;
+}
+.wpb-task-check {
+  display: grid;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  flex: none;
+  border: 1.5px solid var(--text-tertiary);
+  border-radius: 999px;
+  color: #fff;
+  transition: background 150ms ease-out, border-color 150ms ease-out;
+}
+.wpb-task-check.is-on {
+  border-color: var(--accent-color);
+  background: var(--accent-color);
+}
+
+.wpb-act-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.wpb-act-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: var(--accent-color);
+  opacity: 0.6;
+}
+
+/* 移动端：单列 + 详情覆盖层 */
+.wpb-detail-overlay {
+  display: none;
+}
+
+@media (max-width: 767px) {
+  .wpb-shell {
+    padding: 0;
+    gap: 0;
+  }
+  .wpb-list {
+    width: 100%;
+    border: none;
+    border-radius: 0;
+  }
+  .wpb-detail-overlay {
+    display: flex;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 30;
+    background: var(--bg-primary);
+  }
+  .wpb-detail-overlay .wpb-detail {
+    flex: 1;
+    min-width: 0;
+    border: none;
+    border-radius: 0;
+  }
+  .wpb-tabs button {
+    padding: 8px 7px 9px;
+    font-size: 12.5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wpb-card,
+  .wpb-nav-item,
+  .wpb-primary-btn,
+  .wpb-secondary-btn,
+  .wpb-chip {
+    transition: none;
+  }
+}
+
+/* 键盘可达性 */
+.wpb-shell button:focus-visible,
+.wpb-shell input:focus-visible,
+.wpb-shell textarea:focus-visible {
+  outline: 2px solid var(--accent-color);
+  outline-offset: 1px;
+}
+
+/* =========================================================
+   项目工作台 v2：同步状态 / 卡片菜单 / 空状态 CTA / Tab 动效
+   ========================================================= */
+.wpb-sync-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  min-height: 24px;
+  padding: 0 9px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--destructive) 35%, transparent);
+  background: color-mix(in srgb, var(--destructive) 8%, transparent);
+  color: var(--destructive);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.wpb-sync-chip:hover {
+  background: color-mix(in srgb, var(--destructive) 14%, transparent);
+}
+
+.wpb-card-row {
+  position: relative;
+}
+.wpb-card-row .wpb-card {
+  padding-right: 42px;
+}
+.wpb-card-menu {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  color: var(--text-tertiary);
+  background: var(--card);
+  transition: background 150ms ease-out, color 150ms ease-out, opacity 150ms ease-out;
+  opacity: 0.65;
+}
+.wpb-card-menu:hover,
+.wpb-card-menu:focus-visible,
+.wpb-card-row:hover .wpb-card-menu {
+  opacity: 1;
+  background: var(--hover);
+  color: var(--text-secondary);
+}
+.wpb-card-menu:focus-visible {
+  opacity: 1;
+}
+
+.wpb-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 36px 0 28px;
+  text-align: center;
+}
+.wpb-empty-state p {
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+
+.wpb-tab-pane {
+  animation: wpb-pane-in 180ms ease-out;
+}
+@keyframes wpb-pane-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .wpb-tab-pane {
+    animation: none;
+  }
 }

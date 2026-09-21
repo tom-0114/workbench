@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+
+<html class="light" lang="zh-CN"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>个人工作台 - macOS Style</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface": "#f9f9fa",
+                      "on-primary-fixed": "#001a41",
+                      "tertiary-fixed-dim": "#ffb595",
+                      "outline-variant": "#c1c6d7",
+                      "on-surface": "#1a1c1d",
+                      "on-error-container": "#93000a",
+                      "outline": "#717786",
+                      "on-primary-container": "#fefcff",
+                      "secondary-fixed-dim": "#c8c6c8",
+                      "surface-container-highest": "#e2e2e3",
+                      "text-secondary": "#6E6E73",
+                      "inverse-on-surface": "#f0f1f2",
+                      "on-secondary-fixed-variant": "#474649",
+                      "tertiary-container": "#c64f00",
+                      "text-tertiary": "#98989D",
+                      "on-error": "#ffffff",
+                      "primary-fixed": "#d8e2ff",
+                      "primary-container": "#0070eb",
+                      "error": "#ba1a1a",
+                      "surface-tint": "#005bc1",
+                      "surface-dim": "#dadadb",
+                      "primary-fixed-dim": "#adc6ff",
+                      "inverse-primary": "#adc6ff",
+                      "border-subtle": "#ECECEE",
+                      "secondary-fixed": "#e4e2e4",
+                      "on-tertiary-fixed-variant": "#7c2e00",
+                      "hover-overlay": "rgba(0,0,0,0.035)",
+                      "inverse-surface": "#2f3132",
+                      "surface-container-low": "#f3f3f4",
+                      "surface-variant": "#e2e2e3",
+                      "error-container": "#ffdad6",
+                      "tertiary": "#9e3d00",
+                      "on-primary": "#ffffff",
+                      "primary": "#007AFF", /* Adjusted to match specific prompt request for accent */
+                      "on-surface-variant": "#414755",
+                      "bg-primary": "#FFFFFF",
+                      "surface-container-high": "#e8e8e9",
+                      "on-secondary": "#ffffff",
+                      "tertiary-fixed": "#ffdbcc",
+                      "surface-container": "#eeeeef",
+                      "selected-overlay": "rgba(0,0,0,0.055)",
+                      "on-primary-fixed-variant": "#004493",
+                      "surface-bright": "#f9f9fa",
+                      "on-tertiary-fixed": "#351000",
+                      "on-secondary-fixed": "#1b1b1d",
+                      "surface-container-lowest": "#ffffff",
+                      "secondary": "#5f5e60",
+                      "background": "#f9f9fa",
+                      "on-tertiary": "#ffffff",
+                      "on-background": "#1a1c1d",
+                      "secondary-container": "#e2dfe1",
+                      "on-secondary-container": "#636264",
+                      "on-tertiary-container": "#fffbff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "sidebar-px": "20px",
+                      "grid-gutter": "1px",
+                      "xl": "24px",
+                      "sm": "8px",
+                      "lg": "16px",
+                      "xs": "4px",
+                      "md": "12px"
+              },
+              "fontFamily": {
+                      "tiny-label": [
+                              "Inter", "sans-serif"
+                      ],
+                      "todo-item": [
+                              "Inter", "sans-serif"
+                      ],
+                      "sidebar-title": [
+                              "Inter", "sans-serif"
+                      ],
+                      "month-title": [
+                              "Inter", "sans-serif"
+                      ],
+                      "calendar-day": [
+                              "Inter", "sans-serif"
+                      ],
+                      "caption": [
+                              "Inter", "sans-serif"
+                      ]
+              },
+              "fontSize": {
+                      "tiny-label": [
+                              "11px",
+                              {
+                                      "lineHeight": "14px",
+                                      "letterSpacing": "0.01em",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "todo-item": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "sidebar-title": [
+                              "26px",
+                              {
+                                      "lineHeight": "32px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "month-title": [
+                              "19px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "calendar-day": [
+                              "13px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "500"
+                              }
+                      ],
+                      "caption": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "400"
+                              }
+                      ]
+              }
+            },
+          }
+        }
+      </script>
+</head>
+<body class="bg-bg-primary h-screen w-screen overflow-hidden flex font-todo-item text-on-surface antialiased">
+<!-- Left Sidebar (Today Panel) -->
+<aside class="w-[280px] h-full flex-shrink-0 flex flex-col bg-[#F7F7F8] border-r border-border-subtle z-10 pt-xl px-sidebar-px pb-lg">
+<!-- Header -->
+<div class="mb-lg px-2">
+<h1 class="font-sidebar-title text-sidebar-title mb-1">今天</h1>
+<p class="text-text-secondary text-[13px]">9月3日 · 周四</p>
+</div>
+<!-- Section Header -->
+<div class="flex items-center justify-between mb-sm mt-md px-2">
+<span class="font-tiny-label text-tiny-label text-text-tertiary uppercase tracking-wider">TODAY</span>
+<span class="font-tiny-label text-tiny-label text-text-tertiary">3</span>
+</div>
+<!-- Todo List -->
+<div class="flex-1 overflow-y-auto -mx-2 px-2">
+<div class="group flex items-start gap-3 py-2 px-2 rounded-md hover:bg-hover-overlay cursor-default transition-colors duration-200">
+<div class="mt-[2px] w-4 h-4 rounded-full border border-outline flex-shrink-0 flex items-center justify-center group-hover:border-text-secondary transition-colors"></div>
+<div class="flex-1">
+<p class="font-todo-item text-todo-item text-on-surface">回复评审意见</p>
+</div>
+</div>
+<div class="group flex items-start gap-3 py-2 px-2 rounded-md hover:bg-hover-overlay cursor-default transition-colors duration-200">
+<div class="mt-[2px] w-4 h-4 rounded-full border border-outline flex-shrink-0 flex items-center justify-center group-hover:border-text-secondary transition-colors"></div>
+<div class="flex-1">
+<p class="font-todo-item text-todo-item text-on-surface">整理周报</p>
+</div>
+</div>
+<div class="group flex items-start gap-3 py-2 px-2 rounded-md hover:bg-hover-overlay cursor-default transition-colors duration-200">
+<div class="mt-[2px] w-4 h-4 rounded-full border border-outline flex-shrink-0 flex items-center justify-center group-hover:border-text-secondary transition-colors"></div>
+<div class="flex-1">
+<p class="font-todo-item text-todo-item text-on-surface">下单采购清单</p>
+</div>
+</div>
+<!-- Completed Example (Not requested explicitly but implied by todo lists) -->
+<div class="group flex items-start gap-3 py-2 px-2 rounded-md opacity-40 cursor-default mt-2">
+<div class="mt-[2px] w-4 h-4 rounded-full border-none bg-outline flex-shrink-0 flex items-center justify-center">
+<span class="material-symbols-outlined text-[10px] text-white" style="font-variation-settings: 'FILL' 1;">check</span>
+</div>
+<div class="flex-1">
+<p class="font-todo-item text-todo-item text-on-surface line-through">更新设计系统</p>
+</div>
+</div>
+</div>
+<!-- Bottom Add Button -->
+<div class="mt-auto pt-4 px-2">
+<button class="flex items-center gap-2 text-text-secondary hover:text-on-surface transition-colors duration-200 py-1 font-todo-item text-[13px]">
+<span class="material-symbols-outlined text-[16px]">add</span>
+                新建待办
+            </button>
+</div>
+</aside>
+<!-- Right Main Area -->
+<main class="flex-1 flex flex-col h-full bg-bg-primary overflow-hidden relative">
+<!-- Toolbar -->
+<header class="h-14 flex-shrink-0 flex items-center justify-between px-xl border-b border-border-subtle bg-bg-primary z-10 sticky top-0">
+<div>
+<h2 class="font-month-title text-month-title">2026年9月</h2>
+</div>
+<div class="flex items-center gap-1 bg-surface-container-low p-1 rounded-md border border-border-subtle">
+<button class="w-7 h-7 flex items-center justify-center rounded-[4px] hover:bg-surface-container-highest text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[18px]">chevron_left</span>
+</button>
+<button class="px-3 h-7 flex items-center justify-center rounded-[4px] bg-bg-primary border border-border-subtle text-[13px] font-medium text-on-surface shadow-[0_1px_2px_rgba(0,0,0,0.02)]">
+                    今天
+                </button>
+<button class="w-7 h-7 flex items-center justify-center rounded-[4px] hover:bg-surface-container-highest text-on-surface transition-colors">
+<span class="material-symbols-outlined text-[18px]">chevron_right</span>
+</button>
+</div>
+</header>
+<!-- Calendar Container -->
+<div class="flex-1 flex flex-col p-6 overflow-hidden">
+<!-- Days of Week Header -->
+<div class="grid grid-cols-7 mb-2 flex-shrink-0">
+<div class="text-right pr-2 text-[11px] font-medium text-text-secondary uppercase">一</div>
+<div class="text-right pr-2 text-[11px] font-medium text-text-secondary uppercase">二</div>
+<div class="text-right pr-2 text-[11px] font-medium text-text-secondary uppercase">三</div>
+<div class="text-right pr-2 text-[11px] font-medium text-text-secondary uppercase">四</div>
+<div class="text-right pr-2 text-[11px] font-medium text-text-secondary uppercase">五</div>
+<div class="text-right pr-2 text-[11px] font-medium text-text-secondary uppercase">六</div>
+<div class="text-right pr-2 text-[11px] font-medium text-text-secondary uppercase">日</div>
+</div>
+<!-- Calendar Grid -->
+<div class="flex-1 grid grid-cols-7 grid-rows-5 bg-border-subtle gap-grid-gutter border border-border-subtle rounded-sm overflow-hidden">
+<!-- Row 1 -->
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-text-tertiary mb-1">31</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-text-tertiary mb-1">1</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-text-tertiary mb-1">2</div>
+</div>
+<!-- Today Cell -->
+<div class="bg-bg-primary p-2 flex flex-col min-h-0 bg-selected-overlay/20">
+<div class="flex justify-end mb-1">
+<div class="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-white font-calendar-day text-calendar-day">
+                            3
+                        </div>
+</div>
+<div class="flex-1 overflow-y-auto space-y-1 mt-1 pr-1 custom-scrollbar">
+<div class="flex items-center gap-1.5">
+<div class="w-1.5 h-1.5 rounded-full bg-outline"></div>
+<span class="font-caption text-caption text-on-surface truncate">回复评审意见</span>
+</div>
+<div class="flex items-center gap-1.5">
+<div class="w-1.5 h-1.5 rounded-full bg-outline"></div>
+<span class="font-caption text-caption text-on-surface truncate">整理周报</span>
+</div>
+</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">4</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">5</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">6</div>
+</div>
+<!-- Row 2 -->
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">7</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">8</div>
+<div class="flex-1 overflow-y-auto space-y-1 mt-1 pr-1 custom-scrollbar">
+<div class="flex items-center gap-1.5">
+<div class="w-1.5 h-1.5 rounded-full bg-outline"></div>
+<span class="font-caption text-caption text-on-surface truncate">团队周会</span>
+</div>
+</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">9</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">10</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">11</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">12</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">13</div>
+</div>
+<!-- Row 3 -->
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">14</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">15</div>
+<div class="flex-1 overflow-y-auto space-y-1 mt-1 pr-1 custom-scrollbar">
+<div class="flex items-center gap-1.5">
+<div class="w-1.5 h-1.5 rounded-full bg-tertiary-container"></div>
+<span class="font-caption text-caption text-on-surface truncate">版本发布</span>
+</div>
+</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">16</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">17</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">18</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">19</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">20</div>
+</div>
+<!-- Row 4 -->
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">21</div>
+<div class="flex-1 overflow-y-auto space-y-1 mt-1 pr-1 custom-scrollbar">
+<div class="flex items-center gap-1.5">
+<div class="w-1.5 h-1.5 rounded-full bg-outline"></div>
+<span class="font-caption text-caption text-on-surface truncate">体检预约</span>
+</div>
+</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">22</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">23</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">24</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">25</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">26</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">27</div>
+</div>
+<!-- Row 5 -->
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">28</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">29</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-on-surface mb-1">30</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-text-tertiary mb-1">1</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-text-tertiary mb-1">2</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-text-tertiary mb-1">3</div>
+</div>
+<div class="bg-bg-primary p-2 flex flex-col min-h-0">
+<div class="text-right font-calendar-day text-calendar-day text-text-tertiary mb-1">4</div>
+</div>
+</div>
+</div>
+</main>
+<style>
+        /* Custom subtle scrollbar for tight spaces */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 3px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(0,0,0,0.1);
+            border-radius: 4px;
+        }
+        .custom-scrollbar:hover::-webkit-scrollbar-thumb {
+            background: rgba(0,0,0,0.2);
+        }
+    </style>
+</body></html>

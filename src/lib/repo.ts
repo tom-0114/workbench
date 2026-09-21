@@ -7,6 +7,8 @@ export interface TaskRepository {
   createTask(input: NewTask): Promise<Task>;
   updateTask(task: Task): Promise<void>;
   deleteTask(id: number): Promise<void>;
+  restoreTask(id: number): Promise<void>;
+  permanentlyDeleteTask(id: number): Promise<void>;
   /** 重复任务打卡记录，返回 "taskId:date" 集合 */
   listCompletions(): Promise<Set<string>>;
   setCompletion(taskId: number, date: string, done: boolean): Promise<void>;
@@ -24,6 +26,7 @@ const SCHEMA = [
     tags TEXT NOT NULL DEFAULT '[]',
     repeat_rule TEXT NOT NULL DEFAULT 'none',
     completed INTEGER NOT NULL DEFAULT 0,
+    deleted_at TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   )`,
@@ -43,6 +46,7 @@ interface TaskRow {
   tags: string;
   repeat_rule: string;
   completed: number;
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -57,6 +61,7 @@ function rowToTask(r: TaskRow): Task {
     tags: JSON.parse(r.tags || "[]"),
     repeatRule: (r.repeat_rule || "none") as Task["repeatRule"],
     completed: !!r.completed,
+    deletedAt: r.deleted_at ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
@@ -70,6 +75,10 @@ class SqliteRepo implements TaskRepository {
     const Database = (await import("@tauri-apps/plugin-sql")).default;
     this.db = await Database.load("sqlite:workspace.db");
     for (const sql of SCHEMA) await this.db.execute(sql);
+    const columns = await this.db.select<{ name: string }[]>("PRAGMA table_info(tasks)");
+    if (!columns.some((column) => column.name === "deleted_at")) {
+      await this.db.execute("ALTER TABLE tasks ADD COLUMN deleted_at TEXT");
+    }
     await this.checkpoint();
   }
 
@@ -109,7 +118,7 @@ class SqliteRepo implements TaskRepository {
       ],
     );
     await this.checkpoint();
-    return { ...input, id: res.lastInsertId ?? 0, createdAt: now, updatedAt: now };
+    return { ...input, id: res.lastInsertId ?? 0, deletedAt: null, createdAt: now, updatedAt: now };
   }
 
   async updateTask(task: Task): Promise<void> {
@@ -132,8 +141,19 @@ class SqliteRepo implements TaskRepository {
   }
 
   async deleteTask(id: number): Promise<void> {
-    await this.db!.execute("DELETE FROM tasks WHERE id=$1", [id]);
+    const now = nowIso();
+    await this.db!.execute("UPDATE tasks SET deleted_at=$1, updated_at=$1 WHERE id=$2", [now, id]);
+    await this.checkpoint();
+  }
+
+  async restoreTask(id: number): Promise<void> {
+    await this.db!.execute("UPDATE tasks SET deleted_at=NULL, updated_at=$1 WHERE id=$2", [nowIso(), id]);
+    await this.checkpoint();
+  }
+
+  async permanentlyDeleteTask(id: number): Promise<void> {
     await this.db!.execute("DELETE FROM task_completions WHERE task_id=$1", [id]);
+    await this.db!.execute("DELETE FROM tasks WHERE id=$1", [id]);
     await this.checkpoint();
   }
 
@@ -160,67 +180,62 @@ class SqliteRepo implements TaskRepository {
   }
 }
 
-/** 浏览器开发环境：localStorage，字段语义与 SQLite 版一致 */
-class LocalRepo implements TaskRepository {
-  private tasksKey = "workbench.tasks";
-  private completionsKey = "workbench.completions";
+/** 浏览器 Web 版：PostgreSQL REST API（见 server/index.mjs），与桌面版数据语义一致 */
+class RestRepo implements TaskRepository {
+  /** vite 注入：部署在 /workbench/ 子路径时为 "/workbench/"，本地开发为 "/" */
+  private base = `${import.meta.env.BASE_URL}api`;
 
-  private readTasks(): Task[] {
-    return JSON.parse(localStorage.getItem(this.tasksKey) || "[]");
-  }
-  private writeTasks(tasks: Task[]): void {
-    localStorage.setItem(this.tasksKey, JSON.stringify(tasks));
+  private async request<T>(path: string, init?: RequestInit): Promise<T> {
+    const res = await fetch(`${this.base}${path}`, {
+      ...init,
+      credentials: "same-origin",
+      headers: init?.body ? { "content-type": "application/json" } : undefined,
+    });
+    if (res.status === 401) {
+      window.dispatchEvent(new CustomEvent("wb:auth-required"));
+      throw new Error("登录已失效，请重新登录");
+    }
+    if (!res.ok) throw new Error(`API ${res.status}: ${path}`);
+    if (res.status === 204) return undefined as T;
+    return (await res.json()) as T;
   }
 
   async init(): Promise<void> {}
 
   async listTasks(): Promise<Task[]> {
-    return this.readTasks();
+    return this.request<Task[]>("/tasks");
   }
 
   async createTask(input: NewTask): Promise<Task> {
-    const tasks = this.readTasks();
-    const now = nowIso();
-    const task: Task = {
-      ...input,
-      id: tasks.reduce((m, t) => Math.max(m, t.id), 0) + 1,
-      createdAt: now,
-      updatedAt: now,
-    };
-    tasks.push(task);
-    this.writeTasks(tasks);
-    return task;
+    return this.request<Task>("/tasks", { method: "POST", body: JSON.stringify(input) });
   }
 
   async updateTask(task: Task): Promise<void> {
-    const tasks = this.readTasks();
-    const i = tasks.findIndex((t) => t.id === task.id);
-    if (i >= 0) {
-      tasks[i] = { ...task, updatedAt: nowIso() };
-      this.writeTasks(tasks);
-    }
+    await this.request(`/tasks/${task.id}`, { method: "PUT", body: JSON.stringify(task) });
   }
 
   async deleteTask(id: number): Promise<void> {
-    this.writeTasks(this.readTasks().filter((t) => t.id !== id));
-    const set = await this.listCompletions();
-    const kept = [...set].filter((k) => !k.startsWith(`${id}:`));
-    localStorage.setItem(this.completionsKey, JSON.stringify(kept));
+    await this.request(`/tasks/${id}`, { method: "DELETE" });
+  }
+
+  async restoreTask(id: number): Promise<void> {
+    await this.request(`/tasks/${id}/restore`, { method: "POST" });
+  }
+
+  async permanentlyDeleteTask(id: number): Promise<void> {
+    await this.request(`/tasks/${id}/permanent`, { method: "DELETE" });
   }
 
   async listCompletions(): Promise<Set<string>> {
-    return new Set(JSON.parse(localStorage.getItem(this.completionsKey) || "[]"));
+    const keys = await this.request<string[]>("/completions");
+    return new Set(keys);
   }
 
   async setCompletion(taskId: number, date: string, done: boolean): Promise<void> {
-    const set = await this.listCompletions();
-    const key = `${taskId}:${date}`;
-    if (done) set.add(key);
-    else set.delete(key);
-    localStorage.setItem(this.completionsKey, JSON.stringify([...set]));
+    await this.request("/completions", { method: "POST", body: JSON.stringify({ taskId, date, done }) });
   }
 }
 
 export function createRepo(): TaskRepository {
-  return isTauri ? new SqliteRepo() : new LocalRepo();
+  return isTauri ? new SqliteRepo() : new RestRepo();
 }

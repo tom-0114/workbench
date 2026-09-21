@@ -11,11 +11,12 @@ export interface Task {
   tags: string[];
   repeatRule: RepeatRule;
   completed: boolean; // 仅非重复任务使用
+  deletedAt: string | null; // 软删除时间；非空时只在回收站显示
   createdAt: string;
   updatedAt: string;
 }
 
-export type NewTask = Omit<Task, "id" | "createdAt" | "updatedAt">;
+export type NewTask = Omit<Task, "id" | "deletedAt" | "createdAt" | "updatedAt">;
 
 /** 日历/列表上实际渲染的一条：非重复任务本身，或重复任务在某天的实例 */
 export interface Occurrence {

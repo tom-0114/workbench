@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from "vue";
-import { Inbox, Plus, RefreshCw, Search, Settings2, X } from "lucide-vue-next";
-import { Draggable } from "@fullcalendar/interaction";
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
+import { ChevronRight, FolderKanban, Inbox, LogOut, Plus, RefreshCw, Search, Settings2, Trash2, X } from "lucide-vue-next";
+import { useMediaQuery } from "@vueuse/core";
 import { useTaskStore } from "@/stores/tasks";
 import { isTauri } from "@/lib/repo";
+import type { Appearance } from "@/lib/appearance";
+import { loadAppearance, setAppearance } from "@/lib/appearance";
+import { parseQuickAdd } from "@/lib/nl-parse";
+import { parseDate } from "@/lib/date";
 import {
   checkedManually,
   checking,
@@ -17,13 +21,37 @@ import {
   updating,
 } from "@/lib/updater";
 import type { Occurrence, Task } from "@/lib/types";
-import { parseDate } from "@/lib/date";
 import { getDayMark } from "@/lib/cn-holidays";
 import { searchTasks } from "@/lib/search";
+import { endTaskDrag, getDraggedTaskId, hasDraggedTask, TASK_DRAG_END_EVENT } from "@/lib/task-drag";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import SidebarTaskRow from "@/components/SidebarTaskRow.vue";
+import RecycleTaskRow from "@/components/RecycleTaskRow.vue";
 
-const emit = defineEmits<{ (e: "open-task", occ: Occurrence): void }>();
+const emit = defineEmits<{
+  (e: "open-task", occ: Occurrence): void;
+  (e: "logout"): void;
+  (e: "open-projects"): void;
+}>();
 const store = useTaskStore();
+const isMobile = useMediaQuery("(max-width: 767px)");
+
+function readSectionState() {
+  try {
+    const stored = JSON.parse(localStorage.getItem("wb.sidebarSections") || "{}");
+    return { todo: true, done: true, overdue: true, inbox: true, recycle: false, ...stored };
+  } catch {
+    return { todo: true, done: true, overdue: true, inbox: true, recycle: false };
+  }
+}
+
+const sectionOpen = reactive<{ todo: boolean; done: boolean; overdue: boolean; inbox: boolean; recycle: boolean }>(readSectionState());
+watch(
+  sectionOpen,
+  (value) => localStorage.setItem("wb.sidebarSections", JSON.stringify(value)),
+  { deep: true },
+);
 
 const todayStr = computed(() => store.currentDate);
 const dateLabel = computed(() => {
@@ -41,10 +69,14 @@ function taskToOcc(t: Task): Occurrence {
   return { task: t, date: t.dueDate, completed: t.completed, isVirtual: false };
 }
 
-/* 新建待办（内联输入） */
+/* 新建待办（内联输入 + 自然语言日期/重复解析） */
 const adding = ref(false);
 const newTitle = ref("");
 const addInput = ref<HTMLInputElement>();
+
+const addParsed = computed(() =>
+  adding.value && newTitle.value.trim() ? parseQuickAdd(newTitle.value, parseDate(todayStr.value)) : null,
+);
 
 async function startAdd() {
   adding.value = true;
@@ -53,17 +85,33 @@ async function startAdd() {
 }
 async function submitAdd() {
   const t = newTitle.value.trim();
-  if (t) await store.addTask({ title: t, dueDate: todayStr.value });
-  newTitle.value = "";
-  adding.value = false;
+  if (!t) {
+    adding.value = false;
+    return;
+  }
+  const p = parseQuickAdd(t, parseDate(todayStr.value));
+  try {
+    await store.addTask({
+      title: p.title,
+      dueDate: p.dueDate ?? todayStr.value,
+      repeatRule: p.repeatRule ?? "none",
+    });
+    newTitle.value = "";
+    adding.value = false;
+  } catch {
+    await nextTick();
+    addInput.value?.focus();
+  }
 }
 
-/* 收集箱：内联添加 + 拖到日历排期 */
+/* 收集箱：内联添加 + 拖到日历排期（支持自然语言日期） */
 const inboxAdding = ref(false);
 const inboxTitle = ref("");
 const inboxInput = ref<HTMLInputElement>();
-const inboxList = ref<HTMLElement>();
-let draggable: Draggable | null = null;
+
+const inboxParsed = computed(() =>
+  inboxAdding.value && inboxTitle.value.trim() ? parseQuickAdd(inboxTitle.value, new Date()) : null,
+);
 
 async function startInboxAdd() {
   inboxAdding.value = true;
@@ -72,9 +120,23 @@ async function startInboxAdd() {
 }
 async function submitInboxAdd() {
   const t = inboxTitle.value.trim();
-  if (t) await store.addTask({ title: t, dueDate: "" });
-  inboxTitle.value = "";
-  inboxAdding.value = false;
+  if (!t) {
+    inboxAdding.value = false;
+    return;
+  }
+  const p = parseQuickAdd(t, new Date());
+  try {
+    await store.addTask({
+      title: p.title,
+      dueDate: p.dueDate ?? "",
+      repeatRule: p.repeatRule ?? "none",
+    });
+    inboxTitle.value = "";
+    inboxAdding.value = false;
+  } catch {
+    await nextTick();
+    inboxInput.value?.focus();
+  }
 }
 
 /* 搜索：Ctrl+F 或点放大镜进入，Esc 退出 */
@@ -82,7 +144,7 @@ const searching = ref(false);
 const searchQuery = ref("");
 const searchInput = ref<HTMLInputElement>();
 
-const searchResults = computed(() => searchTasks(store.tasks, searchQuery.value));
+const searchResults = computed(() => searchTasks(store.activeTasks, searchQuery.value));
 
 async function openSearch() {
   searching.value = true;
@@ -94,13 +156,60 @@ function closeSearch() {
   searchQuery.value = "";
 }
 function onGlobalKeydown(e: KeyboardEvent) {
+  const target = e.target as HTMLElement | null;
+  const typing =
+    !!target &&
+    (target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA" ||
+      target.tagName === "SELECT" ||
+      target.isContentEditable);
+
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "f") {
     e.preventDefault();
     openSearch();
+    return;
+  }
+  if (typing || e.ctrlKey || e.metaKey || e.altKey) return;
+
+  // T：回到今天（侧栏日期滚动 + 日历跳转）
+  if (e.key === "t" || e.key === "T") {
+    e.preventDefault();
+    store.refreshDate();
+    window.dispatchEvent(new CustomEvent("wb:calendar-nav", { detail: "today" }));
+    return;
+  }
+  // N：新建待办（桌面聚焦侧栏输入；移动端唤起日历快速添加）
+  if (e.key === "n" || e.key === "N") {
+    e.preventDefault();
+    if (isMobile.value) {
+      window.dispatchEvent(new CustomEvent("wb:calendar-nav", { detail: "quickadd" }));
+    } else {
+      void startAdd();
+    }
+    return;
+  }
+  // ←/→：上/下一期（月、周或年，跟随当前视图）
+  if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+    e.preventDefault();
+    window.dispatchEvent(
+      new CustomEvent("wb:calendar-nav", { detail: e.key === "ArrowLeft" ? "prev" : "next" }),
+    );
   }
 }
 onMounted(() => window.addEventListener("keydown", onGlobalKeydown));
 onBeforeUnmount(() => window.removeEventListener("keydown", onGlobalKeydown));
+
+/* 外观（深色模式） */
+const appearance = ref<Appearance>(loadAppearance());
+function changeAppearance(a: Appearance) {
+  appearance.value = a;
+  setAppearance(a);
+}
+const appearanceOptions: Array<[Appearance, string]> = [
+  ["system", "跟随"],
+  ["light", "浅色"],
+  ["dark", "深色"],
+];
 
 function fmtDueLabel(t: Task): string {
   if (!t.dueDate) return "收集箱";
@@ -131,23 +240,55 @@ async function toggleAutostart() {
     autostartEnabled.value = true;
   }
 }
-onMounted(async () => {
-  // 收集箱条目可拖到月历的某一天
-  if (inboxList.value) {
-    draggable = new Draggable(inboxList.value, {
-      itemSelector: "[data-task-id]",
-      eventData: (el) => ({
-        title: el.querySelector(".wb-inbox-title")?.textContent ?? "",
-        create: false,
-      }),
-    });
+type DropTarget = "todo" | "inbox";
+const activeDropTarget = ref<DropTarget | null>(null);
+
+function onDropZoneEnter(event: DragEvent, target: DropTarget) {
+  if (!hasDraggedTask(event.dataTransfer)) return;
+  event.preventDefault();
+  activeDropTarget.value = target;
+}
+
+function onDropZoneOver(event: DragEvent, target: DropTarget) {
+  if (!hasDraggedTask(event.dataTransfer)) return;
+  event.preventDefault();
+  if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+  activeDropTarget.value = target;
+}
+
+function onDropZoneLeave(event: DragEvent, target: DropTarget) {
+  const zone = event.currentTarget as HTMLElement;
+  const next = event.relatedTarget as Node | null;
+  if (next && zone.contains(next)) return;
+  if (activeDropTarget.value === target) activeDropTarget.value = null;
+}
+
+async function onDropZoneDrop(event: DragEvent, target: DropTarget) {
+  if (!hasDraggedTask(event.dataTransfer)) return;
+  event.preventDefault();
+  const taskId = getDraggedTaskId(event.dataTransfer);
+  activeDropTarget.value = null;
+  endTaskDrag();
+  if (!taskId) return;
+  try {
+    await store.moveTask(taskId, target === "todo" ? todayStr.value : "");
+  } catch {
+    // Store 负责错误提示。
   }
+}
+
+function resetDropTarget() {
+  activeDropTarget.value = null;
+}
+
+onMounted(async () => {
+  window.addEventListener(TASK_DRAG_END_EVENT, resetDropTarget);
   if (isTauri) {
     const auto = await import("@tauri-apps/plugin-autostart");
     autostartEnabled.value = await auto.isEnabled();
   }
 });
-onBeforeUnmount(() => draggable?.destroy());
+onBeforeUnmount(() => window.removeEventListener(TASK_DRAG_END_EVENT, resetDropTarget));
 </script>
 
 <template>
@@ -156,14 +297,24 @@ onBeforeUnmount(() => draggable?.destroy());
     <div class="px-5 pb-1 pt-6">
       <div class="flex items-center justify-between">
         <h1 class="text-2xl font-semibold tracking-tight">今天</h1>
-        <button
-          class="rounded-md p-1.5 transition-colors hover:bg-black/[0.045]"
-          style="color: var(--text-tertiary)"
-          title="搜索全部任务 (Ctrl+F)"
-          @click="searching ? closeSearch() : openSearch()"
-        >
-          <Search :size="16" />
-        </button>
+        <div class="flex items-center gap-0.5">
+          <button
+            class="wb-icon-button rounded-md p-1.5 transition-colors hover:bg-black/[0.045]"
+            style="color: var(--text-tertiary)"
+            title="切换到项目工作台"
+            @click="emit('open-projects')"
+          >
+            <FolderKanban :size="16" />
+          </button>
+          <button
+            class="wb-icon-button rounded-md p-1.5 transition-colors hover:bg-black/[0.045]"
+            style="color: var(--text-tertiary)"
+            title="搜索全部任务 (Ctrl+F)"
+            @click="searching ? closeSearch() : openSearch()"
+          >
+            <Search :size="16" />
+          </button>
+        </div>
       </div>
       <div
         class="mt-0.5 flex items-center gap-1.5 text-[13px]"
@@ -199,7 +350,7 @@ onBeforeUnmount(() => draggable?.destroy());
           @keydown.esc="closeSearch"
         />
         <button
-          class="shrink-0 rounded p-0.5 transition-colors hover:bg-black/[0.045]"
+          class="wb-icon-button shrink-0 rounded p-0.5 transition-colors hover:bg-black/[0.045]"
           style="color: var(--text-tertiary)"
           title="关闭 (Esc)"
           @click="closeSearch"
@@ -214,7 +365,7 @@ onBeforeUnmount(() => draggable?.destroy());
       <!-- 搜索结果 -->
       <div v-if="searching">
         <div v-if="!searchQuery.trim()" class="px-2 py-3 text-[12px]" style="color: var(--text-tertiary)">
-          输入关键词搜索全部 {{ store.tasks.length }} 条任务；多个关键词用空格分隔
+          输入关键词搜索全部 {{ store.activeTasks.length }} 条任务；多个关键词用空格分隔
         </div>
         <template v-else>
           <div class="wb-section">
@@ -229,184 +380,200 @@ onBeforeUnmount(() => draggable?.destroy());
             没有匹配的任务
           </div>
           <ul>
-            <li v-for="t in searchResults" :key="t.id" class="wb-item" :class="t.completed ? 'wb-item-done' : ''">
-              <button
-                class="wb-check"
-                :class="t.completed ? 'done' : ''"
-                :title="t.completed ? '取消完成' : '完成'"
-                @click="store.toggleOccurrence(taskToOcc(t))"
-              >
-                ✓
-              </button>
-              <button
-                class="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[14px]"
-                @click="emit('open-task', taskToOcc(t))"
-              >
-                <span class="truncate" :class="t.completed ? 'line-through' : ''" :title="t.title">{{
-                  t.title
-                }}</span>
-                <span v-if="t.priority > 0" class="wb-pri shrink-0" :class="`wb-pri-${t.priority}`" />
-                <span class="ml-auto shrink-0 text-[11px]" style="color: var(--text-tertiary)">{{
-                  fmtDueLabel(t)
-                }}</span>
-              </button>
-            </li>
+            <SidebarTaskRow
+              v-for="t in searchResults"
+              :key="t.id"
+              :occurrence="taskToOcc(t)"
+              :inline-edit="!isMobile"
+              :meta="fmtDueLabel(t)"
+              @open-task="emit('open-task', $event)"
+            />
           </ul>
         </template>
       </div>
 
       <div v-show="!searching">
       <!-- 待办 -->
-      <div class="wb-section">
-        <span>待办</span>
-        <span>{{ pending.length }}</span>
-      </div>
       <div
-        v-if="pending.length === 0 && !adding"
-        class="px-2 py-1 text-[13px]"
-        style="color: var(--text-tertiary)"
+        class="wb-drop-zone"
+        :class="activeDropTarget === 'todo' ? 'is-drop-active' : ''"
+        @dragenter="onDropZoneEnter($event, 'todo')"
+        @dragover="onDropZoneOver($event, 'todo')"
+        @dragleave="onDropZoneLeave($event, 'todo')"
+        @drop="onDropZoneDrop($event, 'todo')"
       >
-        今天没有待办事项
-      </div>
-      <ul>
-        <li v-for="occ in pending" :key="occ.task.id + occ.date" class="wb-item group">
-          <button class="wb-check" title="完成" @click="store.toggleOccurrence(occ)">✓</button>
-          <button
-            class="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[14px]"
-            @click="emit('open-task', occ)"
-          >
-            <span class="truncate" :title="occ.task.title">{{ occ.task.title }}</span>
-            <span
-              v-if="occ.isVirtual"
-              class="text-[10px]"
-              style="color: var(--text-tertiary)"
-              >↻</span
-            >
-            <span v-if="occ.task.priority > 0" class="wb-pri" :class="`wb-pri-${occ.task.priority}`" />
+      <Collapsible v-model:open="sectionOpen.todo">
+        <CollapsibleTrigger as-child>
+          <button type="button" class="wb-section wb-section-toggle" :aria-expanded="sectionOpen.todo">
+            <ChevronRight :class="sectionOpen.todo ? 'is-open' : ''" aria-hidden="true" />
+            <span>待办</span>
+            <span class="wb-section-count">{{ pending.length }}</span>
           </button>
-        </li>
-      </ul>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div
+            v-if="pending.length === 0 && !adding"
+            class="px-2 py-1 text-[13px]"
+            style="color: var(--text-tertiary)"
+          >
+            今天没有待办事项
+          </div>
+          <ul>
+            <SidebarTaskRow
+              v-for="occ in pending"
+              :key="occ.task.id + occ.date"
+              :occurrence="occ"
+              :inline-edit="!isMobile"
+              :draggable="!isMobile"
+              can-move-inbox
+              @open-task="emit('open-task', $event)"
+            />
+          </ul>
+        </CollapsibleContent>
+      </Collapsible>
+      </div>
 
       <!-- 逾期 -->
-      <template v-if="store.overdueTasks.length > 0">
-        <div class="wb-section">
-          <span style="color: #ff3b30">逾期</span>
-          <span>{{ store.overdueTasks.length }}</span>
-        </div>
-        <ul>
-          <li v-for="t in store.overdueTasks" :key="t.id" class="wb-item group">
-            <button class="wb-check" title="完成" @click="store.toggleOccurrence(taskToOcc(t))">
-              ✓
-            </button>
-            <button
-              class="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[14px]"
-              @click="emit('open-task', taskToOcc(t))"
-            >
-              <span class="truncate" :title="t.title">{{ t.title }}</span>
-              <span class="text-[11px]" style="color: var(--text-tertiary)">{{
-                t.dueDate.slice(5).replace("-", "/")
-              }}</span>
-            </button>
-            <button
-              class="hidden shrink-0 rounded-md px-1.5 py-0.5 text-[11px] transition-colors group-hover:block"
-              style="color: var(--text-secondary)"
-              @click="store.moveTask(t.id, todayStr)"
-            >
-              移到今天
-            </button>
-          </li>
-        </ul>
-      </template>
+      <Collapsible v-if="store.overdueTasks.length > 0" v-model:open="sectionOpen.overdue">
+        <CollapsibleTrigger as-child>
+          <button type="button" class="wb-section wb-section-toggle" :aria-expanded="sectionOpen.overdue">
+            <ChevronRight :class="sectionOpen.overdue ? 'is-open' : ''" aria-hidden="true" />
+            <span class="text-destructive">逾期</span>
+            <span class="wb-section-count">{{ store.overdueTasks.length }}</span>
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <ul>
+            <SidebarTaskRow
+              v-for="t in store.overdueTasks"
+              :key="t.id"
+              :occurrence="taskToOcc(t)"
+              :inline-edit="!isMobile"
+              :meta="t.dueDate.slice(5).replace('-', '/')"
+              :draggable="!isMobile"
+              can-move-today
+              can-move-inbox
+              @open-task="emit('open-task', $event)"
+            />
+          </ul>
+        </CollapsibleContent>
+      </Collapsible>
 
-      <!-- 已完成 -->
-      <template v-if="done.length > 0">
-        <div class="wb-section">
-          <span>已完成</span>
-          <span>{{ done.length }}</span>
-        </div>
-        <ul>
-          <li
-            v-for="occ in done"
-            :key="occ.task.id + occ.date"
-            class="wb-item wb-item-done"
-          >
-            <button class="wb-check done" title="取消完成" @click="store.toggleOccurrence(occ)">
-              ✓
-            </button>
-            <button
-              class="min-w-0 flex-1 truncate text-left text-[14px] line-through"
-              :title="occ.task.title"
-              style="color: var(--text-secondary)"
-              @click="emit('open-task', occ)"
-            >
-              {{ occ.task.title }}
-            </button>
-          </li>
-        </ul>
-      </template>
+      <!-- 已完成（可折叠） -->
+      <Collapsible v-if="done.length > 0" v-model:open="sectionOpen.done">
+        <CollapsibleTrigger as-child>
+          <button type="button" class="wb-section wb-section-toggle" :aria-expanded="sectionOpen.done">
+            <ChevronRight :class="sectionOpen.done ? 'is-open' : ''" aria-hidden="true" />
+            <span>已完成</span>
+            <span class="wb-section-count">{{ done.length }}</span>
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <ul>
+            <SidebarTaskRow
+              v-for="occ in done"
+              :key="occ.task.id + occ.date"
+              :occurrence="occ"
+              :inline-edit="!isMobile"
+              @open-task="emit('open-task', $event)"
+            />
+          </ul>
+        </CollapsibleContent>
+      </Collapsible>
 
       <!-- 收集箱 -->
-      <div class="wb-section">
-        <span class="flex items-center gap-1"><Inbox :size="11" /> 收集箱</span>
-        <span>{{ store.inboxTasks.length }}</span>
-      </div>
-      <div ref="inboxList">
-        <ul>
-          <li
-            v-for="t in store.inboxTasks"
-            :key="t.id"
-            class="wb-item cursor-grab active:cursor-grabbing"
-            :data-task-id="t.id"
-            title="拖到日历上可安排日期"
-          >
-            <button class="wb-check" title="完成" @click="store.toggleOccurrence(taskToOcc(t))">
-              ✓
-            </button>
-            <button
-              class="wb-inbox-title min-w-0 flex-1 truncate text-left text-[14px]"
-              :title="t.title"
-              @click="emit('open-task', taskToOcc(t))"
-            >
-              {{ t.title }}
-            </button>
-            <span v-if="t.priority > 0" class="wb-pri" :class="`wb-pri-${t.priority}`" />
-          </li>
-        </ul>
-      </div>
-      <div v-if="inboxAdding" class="wb-item">
-        <span class="wb-check" style="border-style: dashed" />
-        <input
-          ref="inboxInput"
-          v-model="inboxTitle"
-          class="min-w-0 flex-1 bg-transparent text-[14px] outline-none"
-          placeholder="记点什么…"
-          @keydown.enter.prevent="submitInboxAdd"
-          @keydown.esc="inboxAdding = false; inboxTitle = ''"
-          @blur="submitInboxAdd"
-        />
-      </div>
-      <button
-        v-else
-        class="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-[12px] transition-colors hover:bg-black/[0.035]"
-        style="color: var(--text-tertiary)"
-        @click="startInboxAdd"
+      <div
+        class="wb-drop-zone"
+        :class="activeDropTarget === 'inbox' ? 'is-drop-active' : ''"
+        @dragenter="onDropZoneEnter($event, 'inbox')"
+        @dragover="onDropZoneOver($event, 'inbox')"
+        @dragleave="onDropZoneLeave($event, 'inbox')"
+        @drop="onDropZoneDrop($event, 'inbox')"
       >
-        <Plus :size="12" />
-        添加
-      </button>
+      <Collapsible v-model:open="sectionOpen.inbox">
+        <CollapsibleTrigger as-child>
+          <button type="button" class="wb-section wb-section-toggle" :aria-expanded="sectionOpen.inbox">
+            <ChevronRight :class="sectionOpen.inbox ? 'is-open' : ''" aria-hidden="true" />
+            <span class="flex items-center gap-1"><Inbox :size="11" /> 收集箱</span>
+            <span class="wb-section-count">{{ store.inboxTasks.length }}</span>
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div>
+            <ul>
+              <SidebarTaskRow
+                v-for="t in store.inboxTasks"
+                :key="t.id"
+                :occurrence="taskToOcc(t)"
+                :inline-edit="!isMobile"
+                :draggable="!isMobile"
+                can-move-today
+                @open-task="emit('open-task', $event)"
+              />
+            </ul>
+          </div>
+          <div v-if="inboxAdding" class="wb-item">
+            <span class="wb-check" style="border-style: dashed" />
+            <input
+              ref="inboxInput"
+              v-model="inboxTitle"
+              class="min-w-0 flex-1 bg-transparent text-[14px] outline-none"
+              placeholder="记点什么… 可写 明天/每周三"
+              @keydown.enter.prevent="submitInboxAdd"
+              @keydown.esc="inboxAdding = false; inboxTitle = ''"
+              @blur="submitInboxAdd"
+            />
+            <span v-if="inboxParsed?.hint" class="wb-nl-hint">{{ inboxParsed.hint }}</span>
+          </div>
+          <button
+            v-else
+            class="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-[12px] transition-colors hover:bg-black/[0.035]"
+            style="color: var(--text-tertiary)"
+            @click="startInboxAdd"
+          >
+            <Plus :size="12" />
+            添加
+          </button>
+        </CollapsibleContent>
+      </Collapsible>
+      </div>
 
-      <!-- 内联新建输入 -->
+      <!-- 回收站 -->
+      <Collapsible v-model:open="sectionOpen.recycle">
+        <CollapsibleTrigger as-child>
+          <button type="button" class="wb-section wb-section-toggle" :aria-expanded="sectionOpen.recycle">
+            <ChevronRight :class="sectionOpen.recycle ? 'is-open' : ''" aria-hidden="true" />
+            <span class="flex items-center gap-1"><Trash2 :size="11" /> 回收站</span>
+            <span class="wb-section-count">{{ store.recycleBinTasks.length }}</span>
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div
+            v-if="store.recycleBinTasks.length === 0"
+            class="px-2 py-1 text-[13px]"
+            style="color: var(--text-tertiary)"
+          >
+            回收站为空
+          </div>
+          <ul v-else>
+            <RecycleTaskRow v-for="task in store.recycleBinTasks" :key="task.id" :task="task" />
+          </ul>
+        </CollapsibleContent>
+      </Collapsible>
+
+      <!-- 内联新建输入（支持自然语言日期/重复） -->
       <div v-if="adding" class="wb-item">
         <span class="wb-check" style="border-style: dashed" />
         <input
           ref="addInput"
           v-model="newTitle"
           class="min-w-0 flex-1 bg-transparent text-[14px] outline-none"
-          placeholder="添加到今天…"
+          placeholder="添加到今天… 支持 明天/周五/每天"
           @keydown.enter.prevent="submitAdd"
           @keydown.esc="adding = false; newTitle = ''"
           @blur="submitAdd"
         />
+        <span v-if="addParsed?.hint" class="wb-nl-hint">{{ addParsed.hint }}</span>
       </div>
       </div>
     </div>
@@ -428,7 +595,7 @@ onBeforeUnmount(() => draggable?.destroy());
       <Popover>
         <PopoverTrigger as-child>
           <button
-            class="relative rounded-md p-1.5 transition-colors hover:bg-black/[0.035]"
+            class="wb-icon-button relative rounded-md p-1.5 transition-colors hover:bg-black/[0.035]"
             style="color: var(--text-tertiary)"
             title="设置"
           >
@@ -442,6 +609,30 @@ onBeforeUnmount(() => draggable?.destroy());
         </PopoverTrigger>
         <PopoverContent side="top" align="end" class="w-60 p-3">
           <div class="mb-2 text-[13px] font-medium">设置</div>
+
+          <!-- 外观：跟随系统 / 浅色 / 深色 -->
+          <div class="flex items-center justify-between text-[13px]">
+            <span style="color: var(--text-secondary)">外观</span>
+            <div class="flex items-center gap-0.5 rounded-md p-0.5" style="background: var(--secondary)">
+              <button
+                v-for="[value, label] in appearanceOptions"
+                :key="value"
+                type="button"
+                class="rounded-[5px] px-2 py-0.5 text-[12px] transition-all duration-150"
+                :style="
+                  appearance === value
+                    ? 'background: var(--bg-primary); color: var(--text-primary); box-shadow: 0 0 0 1px var(--border-subtle), 0 1px 2px rgba(0,0,0,0.05)'
+                    : 'color: var(--text-secondary)'
+                "
+                :aria-pressed="appearance === value"
+                @click="changeAppearance(value)"
+              >
+                {{ label }}
+              </button>
+            </div>
+          </div>
+          <div class="my-2.5 border-t" style="border-color: var(--border-subtle)" />
+
           <template v-if="isTauri">
             <label class="flex cursor-pointer items-center justify-between text-[13px]">
               <span style="color: var(--text-secondary)">开机自启</span>
@@ -516,8 +707,25 @@ onBeforeUnmount(() => draggable?.destroy());
               </div>
             </div>
           </template>
-          <div v-else class="text-[12px]" style="color: var(--text-tertiary)">
-            浏览器预览模式，数据存 localStorage
+          <div v-else class="flex flex-col gap-3">
+            <div class="text-[12px]" style="color: var(--text-tertiary)">
+              Web 版 · 已载入 {{ store.tasks.length }} 条任务
+            </div>
+            <button
+              type="button"
+              class="flex min-h-9 w-full items-center justify-center gap-2 rounded-md border text-[13px] transition-colors hover:bg-accent"
+              @click="emit('logout')"
+            >
+              <LogOut :size="14" aria-hidden="true" />
+              退出登录
+            </button>
+          </div>
+
+          <div
+            class="mt-2.5 border-t pt-2 text-[11px] leading-5"
+            style="border-color: var(--border-subtle); color: var(--text-tertiary)"
+          >
+            快捷键：N 新建 · T 今天 · ← → 切换 · Ctrl+F 搜索
           </div>
         </PopoverContent>
       </Popover>
