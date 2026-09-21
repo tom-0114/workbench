@@ -19,3 +19,15 @@ export function today(): string {
 export function nowIso(): string {
   return new Date().toISOString();
 }
+
+/** YYYY-MM-DD 加减天数 */
+export function addDays(s: string, n: number): string {
+  const d = parseDate(s);
+  d.setDate(d.getDate() + n);
+  return fmtDate(d);
+}
+
+/** month 为 1-12 */
+export function daysInMonth(year: number, month: number): number {
+  return new Date(year, month, 0).getDate();
+}

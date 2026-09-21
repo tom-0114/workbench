@@ -1,13 +1,29 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
-import { ChevronRight, FolderKanban, Inbox, LogOut, Plus, RefreshCw, Search, Settings2, Trash2, X } from "lucide-vue-next";
+import {
+  CalendarDays,
+  ChevronRight,
+  Download,
+  FolderKanban,
+  FolderOpen,
+  Inbox,
+  LogOut,
+  Plus,
+  RefreshCw,
+  Search,
+  Settings2,
+  Trash2,
+  X,
+} from "lucide-vue-next";
 import { useMediaQuery } from "@vueuse/core";
+import { Solar } from "lunar-typescript";
 import { useTaskStore } from "@/stores/tasks";
 import { isTauri } from "@/lib/repo";
 import type { Appearance } from "@/lib/appearance";
 import { loadAppearance, setAppearance } from "@/lib/appearance";
 import { parseQuickAdd } from "@/lib/nl-parse";
-import { parseDate } from "@/lib/date";
+import { addDays, parseDate } from "@/lib/date";
+import { downloadTaskBackup } from "@/lib/backup";
 import {
   checkedManually,
   checking,
@@ -37,16 +53,33 @@ const emit = defineEmits<{
 const store = useTaskStore();
 const isMobile = useMediaQuery("(max-width: 767px)");
 
-function readSectionState() {
+type SectionState = {
+  todo: boolean;
+  done: boolean;
+  overdue: boolean;
+  upcoming: boolean;
+  inbox: boolean;
+  recycle: boolean;
+};
+const DEFAULT_SECTIONS: SectionState = {
+  todo: true,
+  done: true,
+  overdue: true,
+  upcoming: false,
+  inbox: true,
+  recycle: false,
+};
+
+function readSectionState(): SectionState {
   try {
     const stored = JSON.parse(localStorage.getItem("wb.sidebarSections") || "{}");
-    return { todo: true, done: true, overdue: true, inbox: true, recycle: false, ...stored };
+    return { ...DEFAULT_SECTIONS, ...stored };
   } catch {
-    return { todo: true, done: true, overdue: true, inbox: true, recycle: false };
+    return { ...DEFAULT_SECTIONS };
   }
 }
 
-const sectionOpen = reactive<{ todo: boolean; done: boolean; overdue: boolean; inbox: boolean; recycle: boolean }>(readSectionState());
+const sectionOpen = reactive<SectionState>(readSectionState());
 watch(
   sectionOpen,
   (value) => localStorage.setItem("wb.sidebarSections", JSON.stringify(value)),
@@ -60,10 +93,37 @@ const dateLabel = computed(() => {
   return `${d.getMonth() + 1}月${d.getDate()}日 · ${week}`;
 });
 
+/** 农历月日 + 当天节气（如 八月十一 · 秋分） */
+const lunarLabel = computed(() => {
+  const d = parseDate(todayStr.value);
+  const lunar = Solar.fromYmd(d.getFullYear(), d.getMonth() + 1, d.getDate()).getLunar();
+  const jieQi = lunar.getJieQi();
+  return `${lunar.getMonthInChinese()}月${lunar.getDayInChinese()}${jieQi ? ` · ${jieQi}` : ""}`;
+});
+
 const todayMark = computed(() => getDayMark(todayStr.value));
 
 const pending = computed(() => store.todayOccurrences.filter((o) => !o.completed));
 const done = computed(() => store.todayOccurrences.filter((o) => o.completed));
+
+/* 接下来 7 天：明天起的未完成排期（含重复任务实例），按日期再按优先级 */
+const upcoming = computed(() =>
+  store
+    .occurrencesInRange(addDays(todayStr.value, 1), addDays(todayStr.value, 7))
+    .filter((o) => !o.completed)
+    .sort(
+      (a, b) =>
+        a.date.localeCompare(b.date) || b.task.priority - a.task.priority || a.task.id - b.task.id,
+    ),
+);
+
+function fmtUpcomingMeta(date: string): string {
+  const diff = Math.round((parseDate(date).getTime() - parseDate(todayStr.value).getTime()) / 86_400_000);
+  if (diff === 1) return "明天";
+  if (diff === 2) return "后天";
+  const d = parseDate(date);
+  return `周${"日一二三四五六"[d.getDay()]} ${d.getMonth() + 1}/${d.getDate()}`;
+}
 
 function taskToOcc(t: Task): Occurrence {
   return { task: t, date: t.dueDate, completed: t.completed, isVirtual: false };
@@ -83,13 +143,17 @@ async function startAdd() {
   await nextTick();
   addInput.value?.focus();
 }
+const addBusy = ref(false);
 async function submitAdd() {
+  // Enter 后请求未返回时输入框失焦会再触发一次 blur，不加锁会建出两条
+  if (addBusy.value) return;
   const t = newTitle.value.trim();
   if (!t) {
     adding.value = false;
     return;
   }
   const p = parseQuickAdd(t, parseDate(todayStr.value));
+  addBusy.value = true;
   try {
     await store.addTask({
       title: p.title,
@@ -101,6 +165,8 @@ async function submitAdd() {
   } catch {
     await nextTick();
     addInput.value?.focus();
+  } finally {
+    addBusy.value = false;
   }
 }
 
@@ -118,13 +184,16 @@ async function startInboxAdd() {
   await nextTick();
   inboxInput.value?.focus();
 }
+const inboxBusy = ref(false);
 async function submitInboxAdd() {
+  if (inboxBusy.value) return;
   const t = inboxTitle.value.trim();
   if (!t) {
     inboxAdding.value = false;
     return;
   }
   const p = parseQuickAdd(t, new Date());
+  inboxBusy.value = true;
   try {
     await store.addTask({
       title: p.title,
@@ -136,6 +205,8 @@ async function submitInboxAdd() {
   } catch {
     await nextTick();
     inboxInput.value?.focus();
+  } finally {
+    inboxBusy.value = false;
   }
 }
 
@@ -157,6 +228,8 @@ function closeSearch() {
 }
 function onGlobalKeydown(e: KeyboardEvent) {
   const target = e.target as HTMLElement | null;
+  // 编辑弹窗 / 下拉菜单里的按键不应切换日历或新建待办
+  if (target?.closest('[role="dialog"], [role="menu"], [role="listbox"]')) return;
   const typing =
     !!target &&
     (target.tagName === "INPUT" ||
@@ -229,6 +302,21 @@ onMounted(async () => {
     }
   }
 });
+/* 备份：Web 版导出 JSON；桌面版数据就在 workspace.db，直接在资源管理器里定位它 */
+function exportBackup() {
+  downloadTaskBackup(store.tasks, store.completions);
+}
+async function revealDatabase() {
+  if (!isTauri) return;
+  try {
+    const { appConfigDir, join } = await import("@tauri-apps/api/path");
+    const { revealItemInDir } = await import("@tauri-apps/plugin-opener");
+    await revealItemInDir(await join(await appConfigDir(), "workspace.db"));
+  } catch (e) {
+    store.operationError = `无法打开数据目录：${String(e)}`;
+  }
+}
+
 async function toggleAutostart() {
   if (!isTauri) return;
   const auto = await import("@tauri-apps/plugin-autostart");
@@ -299,7 +387,7 @@ onBeforeUnmount(() => window.removeEventListener(TASK_DRAG_END_EVENT, resetDropT
         <h1 class="text-2xl font-semibold tracking-tight">今天</h1>
         <div class="flex items-center gap-0.5">
           <button
-            class="wb-icon-button rounded-md p-1.5 transition-colors hover:bg-black/[0.045]"
+            class="wb-icon-button rounded-md p-1.5 transition-colors hover:bg-[var(--hover)]"
             style="color: var(--text-tertiary)"
             title="切换到项目工作台"
             @click="emit('open-projects')"
@@ -307,7 +395,7 @@ onBeforeUnmount(() => window.removeEventListener(TASK_DRAG_END_EVENT, resetDropT
             <FolderKanban :size="16" />
           </button>
           <button
-            class="wb-icon-button rounded-md p-1.5 transition-colors hover:bg-black/[0.045]"
+            class="wb-icon-button rounded-md p-1.5 transition-colors hover:bg-[var(--hover)]"
             style="color: var(--text-tertiary)"
             title="搜索全部任务 (Ctrl+F)"
             @click="searching ? closeSearch() : openSearch()"
@@ -333,12 +421,13 @@ onBeforeUnmount(() => window.removeEventListener(TASK_DRAG_END_EVENT, resetDropT
           {{ todayMark.type === "holiday" ? `${todayMark.name} 休` : "班" }}
         </span>
       </div>
+      <div class="mt-px text-[12px]" style="color: var(--text-tertiary)">{{ lunarLabel }}</div>
     </div>
 
     <!-- 搜索输入 -->
     <div v-if="searching" class="px-3 pb-1 pt-2">
       <div
-        class="flex items-center gap-2 rounded-[8px] border bg-white px-2.5 py-1.5"
+        class="flex items-center gap-2 rounded-[8px] border bg-[var(--bg-primary)] px-2.5 py-1.5"
         style="border-color: var(--border-subtle)"
       >
         <Search :size="13" style="color: var(--text-tertiary)" class="shrink-0" />
@@ -350,7 +439,7 @@ onBeforeUnmount(() => window.removeEventListener(TASK_DRAG_END_EVENT, resetDropT
           @keydown.esc="closeSearch"
         />
         <button
-          class="wb-icon-button shrink-0 rounded p-0.5 transition-colors hover:bg-black/[0.045]"
+          class="wb-icon-button shrink-0 rounded p-0.5 transition-colors hover:bg-[var(--hover)]"
           style="color: var(--text-tertiary)"
           title="关闭 (Esc)"
           @click="closeSearch"
@@ -425,6 +514,7 @@ onBeforeUnmount(() => window.removeEventListener(TASK_DRAG_END_EVENT, resetDropT
               :occurrence="occ"
               :inline-edit="!isMobile"
               :draggable="!isMobile"
+              can-postpone
               can-move-inbox
               @open-task="emit('open-task', $event)"
             />
@@ -452,7 +542,33 @@ onBeforeUnmount(() => window.removeEventListener(TASK_DRAG_END_EVENT, resetDropT
               :meta="t.dueDate.slice(5).replace('-', '/')"
               :draggable="!isMobile"
               can-move-today
+              can-postpone
               can-move-inbox
+              @open-task="emit('open-task', $event)"
+            />
+          </ul>
+        </CollapsibleContent>
+      </Collapsible>
+
+      <!-- 接下来 7 天 -->
+      <Collapsible v-if="upcoming.length > 0" v-model:open="sectionOpen.upcoming">
+        <CollapsibleTrigger as-child>
+          <button type="button" class="wb-section wb-section-toggle" :aria-expanded="sectionOpen.upcoming">
+            <ChevronRight :class="sectionOpen.upcoming ? 'is-open' : ''" aria-hidden="true" />
+            <span class="flex items-center gap-1"><CalendarDays :size="11" /> 接下来 7 天</span>
+            <span class="wb-section-count">{{ upcoming.length }}</span>
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <ul>
+            <SidebarTaskRow
+              v-for="occ in upcoming"
+              :key="occ.task.id + occ.date"
+              :occurrence="occ"
+              :inline-edit="!isMobile"
+              :meta="fmtUpcomingMeta(occ.date)"
+              :draggable="!isMobile"
+              can-move-today
               @open-task="emit('open-task', $event)"
             />
           </ul>
@@ -527,7 +643,7 @@ onBeforeUnmount(() => window.removeEventListener(TASK_DRAG_END_EVENT, resetDropT
           </div>
           <button
             v-else
-            class="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-[12px] transition-colors hover:bg-black/[0.035]"
+            class="flex w-full items-center gap-1.5 rounded-md px-2 py-1 text-[12px] transition-colors hover:bg-[var(--hover)]"
             style="color: var(--text-tertiary)"
             @click="startInboxAdd"
           >
@@ -584,7 +700,7 @@ onBeforeUnmount(() => window.removeEventListener(TASK_DRAG_END_EVENT, resetDropT
       style="border-color: var(--border-subtle)"
     >
       <button
-        class="flex items-center gap-1.5 rounded-md px-2 py-1 text-[13px] transition-colors hover:bg-black/[0.035]"
+        class="flex items-center gap-1.5 rounded-md px-2 py-1 text-[13px] transition-colors hover:bg-[var(--hover)]"
         style="color: var(--text-secondary)"
         @click="startAdd"
       >
@@ -595,7 +711,7 @@ onBeforeUnmount(() => window.removeEventListener(TASK_DRAG_END_EVENT, resetDropT
       <Popover>
         <PopoverTrigger as-child>
           <button
-            class="wb-icon-button relative rounded-md p-1.5 transition-colors hover:bg-black/[0.035]"
+            class="wb-icon-button relative rounded-md p-1.5 transition-colors hover:bg-[var(--hover)]"
             style="color: var(--text-tertiary)"
             title="设置"
           >
@@ -666,7 +782,7 @@ onBeforeUnmount(() => window.removeEventListener(TASK_DRAG_END_EVENT, resetDropT
                   更新到 v{{ updateVersion }}
                 </button>
                 <button
-                  class="rounded-md p-1 transition-colors hover:bg-black/[0.045]"
+                  class="rounded-md p-1 transition-colors hover:bg-[var(--hover)]"
                   style="color: var(--text-tertiary)"
                   title="重新检查是否有更新版本"
                   :disabled="checking"
@@ -677,7 +793,7 @@ onBeforeUnmount(() => window.removeEventListener(TASK_DRAG_END_EVENT, resetDropT
               </span>
               <button
                 v-else
-                class="rounded-md px-2 py-0.5 text-[12px] transition-colors hover:bg-black/[0.045]"
+                class="rounded-md px-2 py-0.5 text-[12px] transition-colors hover:bg-[var(--hover)]"
                 style="color: var(--text-secondary)"
                 :disabled="checking"
                 @click="checkUpdate(false)"
@@ -706,11 +822,30 @@ onBeforeUnmount(() => window.removeEventListener(TASK_DRAG_END_EVENT, resetDropT
                 数据层错误：{{ store.initError }}
               </div>
             </div>
+            <button
+              type="button"
+              class="mt-1.5 flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[12px] transition-colors hover:bg-[var(--hover)]"
+              style="color: var(--text-secondary)"
+              title="备份时直接复制这个文件即可"
+              @click="revealDatabase"
+            >
+              <FolderOpen :size="13" aria-hidden="true" />
+              在文件夹中显示 workspace.db
+            </button>
           </template>
           <div v-else class="flex flex-col gap-3">
             <div class="text-[12px]" style="color: var(--text-tertiary)">
               Web 版 · 已载入 {{ store.tasks.length }} 条任务
             </div>
+            <button
+              type="button"
+              class="flex min-h-9 w-full items-center justify-center gap-2 rounded-md border text-[13px] transition-colors hover:bg-accent"
+              title="导出全部任务与打卡记录（含回收站）"
+              @click="exportBackup"
+            >
+              <Download :size="14" aria-hidden="true" />
+              导出 JSON 备份
+            </button>
             <button
               type="button"
               class="flex min-h-9 w-full items-center justify-center gap-2 rounded-md border text-[13px] transition-colors hover:bg-accent"

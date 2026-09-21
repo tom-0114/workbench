@@ -276,6 +276,13 @@ export const useProjectStore = defineStore("projects", () => {
       return;
     }
     try {
+      // 先把本机未同步的修改推上去，否则拉下来的远端数据会把它们盖掉
+      await Promise.all(
+        [...pendingSaves.keys()].map((id) => {
+          clearTimeout(pendingSaves.get(id)!);
+          return flushSave(id);
+        }),
+      );
       const remote = await repo.list();
       if (remote.length > 0) {
         projects.value = remote;

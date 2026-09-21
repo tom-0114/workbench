@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from "vue";
-import { CalendarClock, Check, Inbox, LoaderCircle, Pencil, Trash2, X } from "lucide-vue-next";
+import { CalendarArrowDown, CalendarClock, Check, Inbox, LoaderCircle, Pencil, Trash2, X } from "lucide-vue-next";
 import { useTaskStore } from "@/stores/tasks";
 import type { Occurrence } from "@/lib/types";
+import { addDays } from "@/lib/date";
 import { endTaskDrag, startTaskDrag } from "@/lib/task-drag";
 
 const props = withDefaults(
@@ -12,6 +13,7 @@ const props = withDefaults(
     meta?: string;
     canMoveToday?: boolean;
     canMoveInbox?: boolean;
+    canPostpone?: boolean;
     draggable?: boolean;
   }>(),
   {
@@ -19,6 +21,7 @@ const props = withDefaults(
     meta: "",
     canMoveToday: false,
     canMoveInbox: false,
+    canPostpone: false,
     draggable: false,
   },
 );
@@ -96,6 +99,14 @@ async function moveToday() {
 async function moveInbox() {
   try {
     await store.moveTask(props.occurrence.task.id, "");
+  } catch {
+    // Store 负责错误提示。
+  }
+}
+
+async function postpone() {
+  try {
+    await store.moveTask(props.occurrence.task.id, addDays(store.currentDate, 1));
   } catch {
     // Store 负责错误提示。
   }
@@ -219,8 +230,9 @@ async function confirmDelete() {
         >
           <Pencil aria-hidden="true" />
         </button>
+        <!-- 改期类操作会移动整个系列，重复任务实例不显示 -->
         <button
-          v-if="canMoveToday"
+          v-if="canMoveToday && !occurrence.isVirtual"
           type="button"
           aria-label="移到今天"
           title="移到今天"
@@ -229,7 +241,16 @@ async function confirmDelete() {
           <CalendarClock aria-hidden="true" />
         </button>
         <button
-          v-if="canMoveInbox"
+          v-if="canPostpone && !occurrence.isVirtual"
+          type="button"
+          aria-label="推迟到明天"
+          title="推迟到明天"
+          @click="postpone"
+        >
+          <CalendarArrowDown aria-hidden="true" />
+        </button>
+        <button
+          v-if="canMoveInbox && !occurrence.isVirtual"
           type="button"
           aria-label="移到收集箱"
           title="移到收集箱"

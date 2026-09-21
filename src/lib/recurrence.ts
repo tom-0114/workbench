@@ -1,6 +1,6 @@
 import { Lunar, Solar } from "lunar-typescript";
 import type { Occurrence, Task } from "./types";
-import { fmtDate, parseDate } from "./date";
+import { daysInMonth, fmtDate, parseDate } from "./date";
 
 export function completionKey(taskId: number, date: string): string {
   return `${taskId}:${date}`;
@@ -111,9 +111,12 @@ export function expandOccurrences(
         case "weekly":
           match = cur.getDay() === anchor.getDay();
           break;
-        case "monthly":
-          match = cur.getDate() === anchor.getDate();
+        case "monthly": {
+          // 锚点日超过当月天数时落到月末，否则 31 号的任务会跳过所有小月
+          const last = daysInMonth(cur.getFullYear(), cur.getMonth() + 1);
+          match = cur.getDate() === Math.min(anchor.getDate(), last);
           break;
+        }
       }
       if (match) {
         const ds = fmtDate(cur);

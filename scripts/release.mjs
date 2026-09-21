@@ -18,6 +18,10 @@ const run = (cmd, opts = {}) =>
 
 const conf = JSON.parse(readFileSync(join(root, "src-tauri/tauri.conf.json"), "utf8"));
 const version = conf.version;
+const pkg = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
+if (pkg.version !== version) {
+  throw new Error(`版本号不一致：package.json ${pkg.version} ≠ tauri.conf.json ${version}`);
+}
 const notes = process.argv[2] || `v${version}`;
 
 // 从 git remote 推导仓库 owner/name
