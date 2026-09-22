@@ -1,5 +1,5 @@
-// 个人工作台 Web 版后端：PostgreSQL REST API。
-// 与桌面版（Tauri + 本地 SQLite）共用的数据语义见 src/lib/types.ts：
+// 个人工作台后端：PostgreSQL REST API。
+// 数据语义见 src/lib/types.ts：
 //   Task: { id, title, notes, dueDate, priority, tags, repeatRule, completed, deletedAt, createdAt, updatedAt }
 //   completions: "taskId:date" 集合（重复任务按天打卡）
 // 单用户个人应用；Web API 使用签名 HttpOnly Cookie 鉴权，表结构在启动时自动创建。

@@ -11,7 +11,6 @@ import type {
   ProjectTask,
 } from "@/lib/project-types";
 import { newId } from "@/lib/project-types";
-import { isTauri } from "@/lib/repo";
 
 const STORAGE_KEY = "wb.projects.v1";
 const API_BASE = `${import.meta.env.BASE_URL}api`;
@@ -172,7 +171,7 @@ function loadLocal(): Project[] {
   }
 }
 
-/** Web 端项目同步：本地优先（乐观更新），整份文档防抖 PUT 到 PostgreSQL；桌面端保持纯本地 */
+/** 项目同步：本地优先（乐观更新），整份文档防抖 PUT 到 PostgreSQL；localStorage 只是离线缓存 */
 class ProjectSyncRepo {
   async list(): Promise<Project[]> {
     const res = await fetch(`${API_BASE}/projects`, { credentials: "same-origin" });
@@ -216,11 +215,11 @@ class ProjectSyncRepo {
 export const useProjectStore = defineStore("projects", () => {
   const projects = ref<Project[]>(loadLocal());
 
-  /** idle=无待同步 syncing=同步中 error=有修改未同步（web 端才有意义） */
+  /** idle=无待同步 syncing=同步中 error=有修改未同步 */
   const syncState = ref<"idle" | "syncing" | "error">("idle");
   const ready = ref(false);
 
-  const repo = isTauri ? null : new ProjectSyncRepo();
+  const repo = new ProjectSyncRepo();
   const pendingSaves = new Map<string, number>();
 
   watch(
@@ -236,13 +235,11 @@ export const useProjectStore = defineStore("projects", () => {
   );
 
   function queueSync(id: string, delay = SYNC_DEBOUNCE_MS) {
-    if (!repo) return;
     if (pendingSaves.has(id)) clearTimeout(pendingSaves.get(id)!);
     pendingSaves.set(id, window.setTimeout(() => void flushSave(id), delay));
   }
 
   async function flushSave(id: string, keepalive = false) {
-    if (!repo) return;
     pendingSaves.delete(id);
     const project = projects.value.find((p) => p.id === id);
     if (!project) return;
@@ -257,7 +254,6 @@ export const useProjectStore = defineStore("projects", () => {
 
   /** 离开页面前把未同步的项目一并发出（keepalive 不阻塞关闭） */
   function flushAll(keepalive = false) {
-    if (!repo) return;
     for (const id of [...pendingSaves.keys()]) {
       clearTimeout(pendingSaves.get(id)!);
       pendingSaves.delete(id);
@@ -271,11 +267,14 @@ export const useProjectStore = defineStore("projects", () => {
 
   /** 登录后拉取服务端数据；远端为空时把本机数据（种子/离线修改）迁移上去 */
   async function init() {
-    if (!repo) {
-      ready.value = true;
-      return;
-    }
     try {
+      // 先把本机未同步的修改推上去，否则拉下来的远端数据会把它们盖掉
+      await Promise.all(
+        [...pendingSaves.keys()].map((id) => {
+          clearTimeout(pendingSaves.get(id)!);
+          return flushSave(id);
+        }),
+      );
       const remote = await repo.list();
       if (remote.length > 0) {
         projects.value = remote;
@@ -291,9 +290,7 @@ export const useProjectStore = defineStore("projects", () => {
     }
   }
 
-  if (!isTauri && typeof window !== "undefined") {
-    window.addEventListener("pagehide", () => flushAll(true));
-  }
+  window.addEventListener("pagehide", () => flushAll(true));
 
   const sorted = computed(() =>
     [...projects.value].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
@@ -373,12 +370,10 @@ export const useProjectStore = defineStore("projects", () => {
       pendingSaves.delete(id);
     }
     projects.value = projects.value.filter((p) => p.id !== id);
-    if (repo) {
-      syncState.value = "syncing";
-      repo.remove(id).catch(() => {
-        syncState.value = "error";
-      });
-    }
+    syncState.value = "syncing";
+    repo.remove(id).catch(() => {
+      syncState.value = "error";
+    });
   }
 
   function addInspiration(id: string, content: string) {

@@ -145,6 +145,7 @@ function applyChip(chip: string) {
 }
 
 function addIdea() {
+  if (!ideaDraft.value.trim()) return;
   store.addInspiration(props.project.id, ideaDraft.value);
   ideaDraft.value = "";
   persistDraft();

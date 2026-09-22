@@ -1,10 +1,8 @@
 import { defineStore } from "pinia";
 import type { NewTask, Occurrence, Task } from "@/lib/types";
-import { createRepo } from "@/lib/repo";
+import { taskRepo as repo } from "@/lib/repo";
 import { completionKey, expandOccurrences } from "@/lib/recurrence";
 import { today } from "@/lib/date";
-
-const repo = createRepo();
 
 export const useTaskStore = defineStore("tasks", {
   state: () => ({
@@ -58,7 +56,6 @@ export const useTaskStore = defineStore("tasks", {
       this.ready = false;
       this.initError = "";
       try {
-        await repo.init();
         this.tasks = await repo.listTasks();
         this.completions = await repo.listCompletions();
         this.ready = true;

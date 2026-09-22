@@ -3,9 +3,7 @@ import { onBeforeUnmount, onMounted, ref } from "vue";
 import { useMediaQuery } from "@vueuse/core";
 import { AlertCircle, CalendarDays, FolderKanban, ListTodo, LoaderCircle, RefreshCw, X } from "lucide-vue-next";
 import { useTaskStore } from "@/stores/tasks";
-import { checkUpdate, loadVersion } from "@/lib/updater";
 import { getSession, login, logout } from "@/lib/auth";
-import { isTauri } from "@/lib/repo";
 import type { Occurrence } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import LoginPage from "@/components/LoginPage.vue";
@@ -27,7 +25,6 @@ const workspace = ref<Workspace>(
 const appState = ref<"checking" | "guest" | "loading" | "ready" | "error">("checking");
 const loginBusy = ref(false);
 const loginError = ref("");
-let updaterStarted = false;
 let authRevision = 0;
 
 function setWorkspace(next: Workspace, pane?: "today" | "calendar") {
@@ -65,14 +62,6 @@ function startResize(e: PointerEvent) {
   window.addEventListener("pointerup", up);
 }
 
-function startUpdater() {
-  if (updaterStarted) return;
-  updaterStarted = true;
-  // 启动后静默检查更新（有新版会在设置齿轮上显示红点）
-  loadVersion();
-  checkUpdate(true);
-}
-
 async function loadWorkspace() {
   const revision = authRevision;
   appState.value = "loading";
@@ -80,11 +69,9 @@ async function loadWorkspace() {
   // 初始化请求若收到 401，会由全局事件先切回登录页；不要再被通用错误页覆盖。
   if (authRevision !== revision) return;
   appState.value = ready ? "ready" : "error";
-  if (ready) startUpdater();
 }
 
 async function bootstrap() {
-  if (isTauri) return loadWorkspace();
   appState.value = "checking";
   try {
     const session = await getSession();
@@ -120,7 +107,6 @@ async function handleLogout() {
 }
 
 function onAuthRequired() {
-  if (isTauri) return;
   authRevision += 1;
   store.resetData();
   taskDialogOpen.value = false;
