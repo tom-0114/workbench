@@ -5,11 +5,9 @@ import {
   ChevronRight,
   Download,
   FolderKanban,
-  FolderOpen,
   Inbox,
   LogOut,
   Plus,
-  RefreshCw,
   Search,
   Settings2,
   Trash2,
@@ -18,24 +16,11 @@ import {
 import { useMediaQuery } from "@vueuse/core";
 import { Solar } from "lunar-typescript";
 import { useTaskStore } from "@/stores/tasks";
-import { isTauri } from "@/lib/repo";
 import type { Appearance } from "@/lib/appearance";
 import { loadAppearance, setAppearance } from "@/lib/appearance";
 import { parseQuickAdd } from "@/lib/nl-parse";
 import { addDays, parseDate } from "@/lib/date";
 import { downloadTaskBackup } from "@/lib/backup";
-import {
-  checkedManually,
-  checking,
-  checkUpdate,
-  currentVersion,
-  installUpdate,
-  updateAvailable,
-  updateError,
-  updateProgress,
-  updateVersion,
-  updating,
-} from "@/lib/updater";
 import type { Occurrence, Task } from "@/lib/types";
 import { getDayMark } from "@/lib/cn-holidays";
 import { searchTasks } from "@/lib/search";
@@ -289,45 +274,11 @@ function fmtDueLabel(t: Task): string {
   return t.dueDate.replace(/-/g, "/");
 }
 
-/* 开机自启（设置弹层内） */
-const autostartEnabled = ref(false);
-const dataDir = ref("");
-onMounted(async () => {
-  if (isTauri) {
-    try {
-      const { appConfigDir } = await import("@tauri-apps/api/path");
-      dataDir.value = await appConfigDir();
-    } catch (e) {
-      dataDir.value = `获取失败: ${String(e)}`;
-    }
-  }
-});
-/* 备份：Web 版导出 JSON；桌面版数据就在 workspace.db，直接在资源管理器里定位它 */
+/* 备份：导出全部任务与打卡记录为 JSON */
 function exportBackup() {
   downloadTaskBackup(store.tasks, store.completions);
 }
-async function revealDatabase() {
-  if (!isTauri) return;
-  try {
-    const { appConfigDir, join } = await import("@tauri-apps/api/path");
-    const { revealItemInDir } = await import("@tauri-apps/plugin-opener");
-    await revealItemInDir(await join(await appConfigDir(), "workspace.db"));
-  } catch (e) {
-    store.operationError = `无法打开数据目录：${String(e)}`;
-  }
-}
 
-async function toggleAutostart() {
-  if (!isTauri) return;
-  const auto = await import("@tauri-apps/plugin-autostart");
-  if (await auto.isEnabled()) {
-    await auto.disable();
-    autostartEnabled.value = false;
-  } else {
-    await auto.enable();
-    autostartEnabled.value = true;
-  }
-}
 type DropTarget = "todo" | "inbox";
 const activeDropTarget = ref<DropTarget | null>(null);
 
@@ -369,13 +320,7 @@ function resetDropTarget() {
   activeDropTarget.value = null;
 }
 
-onMounted(async () => {
-  window.addEventListener(TASK_DRAG_END_EVENT, resetDropTarget);
-  if (isTauri) {
-    const auto = await import("@tauri-apps/plugin-autostart");
-    autostartEnabled.value = await auto.isEnabled();
-  }
-});
+onMounted(() => window.addEventListener(TASK_DRAG_END_EVENT, resetDropTarget));
 onBeforeUnmount(() => window.removeEventListener(TASK_DRAG_END_EVENT, resetDropTarget));
 </script>
 
@@ -711,16 +656,11 @@ onBeforeUnmount(() => window.removeEventListener(TASK_DRAG_END_EVENT, resetDropT
       <Popover>
         <PopoverTrigger as-child>
           <button
-            class="wb-icon-button relative rounded-md p-1.5 transition-colors hover:bg-[var(--hover)]"
+            class="wb-icon-button rounded-md p-1.5 transition-colors hover:bg-[var(--hover)]"
             style="color: var(--text-tertiary)"
             title="设置"
           >
             <Settings2 :size="15" />
-            <span
-              v-if="updateAvailable"
-              class="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full"
-              style="background: #ff3b30"
-            />
           </button>
         </PopoverTrigger>
         <PopoverContent side="top" align="end" class="w-60 p-3">
@@ -749,93 +689,9 @@ onBeforeUnmount(() => window.removeEventListener(TASK_DRAG_END_EVENT, resetDropT
           </div>
           <div class="my-2.5 border-t" style="border-color: var(--border-subtle)" />
 
-          <template v-if="isTauri">
-            <label class="flex cursor-pointer items-center justify-between text-[13px]">
-              <span style="color: var(--text-secondary)">开机自启</span>
-              <input
-                type="checkbox"
-                class="h-3.5 w-3.5"
-                :checked="autostartEnabled"
-                @change="toggleAutostart"
-              />
-            </label>
-
-            <div class="my-2.5 border-t" style="border-color: var(--border-subtle)" />
-
-            <!-- 更新 -->
-            <div class="flex items-center justify-between text-[13px]">
-              <span style="color: var(--text-secondary)">版本 v{{ currentVersion }}</span>
-              <button
-                v-if="updating"
-                class="rounded-md px-2 py-0.5 text-[12px]"
-                style="color: var(--text-tertiary)"
-                disabled
-              >
-                更新中 {{ updateProgress }}%
-              </button>
-              <span v-else-if="updateAvailable" class="flex items-center gap-1">
-                <button
-                  class="rounded-md px-2 py-0.5 text-[12px] text-white transition-opacity hover:opacity-90"
-                  style="background: var(--accent-color)"
-                  @click="installUpdate"
-                >
-                  更新到 v{{ updateVersion }}
-                </button>
-                <button
-                  class="rounded-md p-1 transition-colors hover:bg-[var(--hover)]"
-                  style="color: var(--text-tertiary)"
-                  title="重新检查是否有更新版本"
-                  :disabled="checking"
-                  @click="checkUpdate(false)"
-                >
-                  <RefreshCw :size="12" :class="checking ? 'animate-spin' : ''" />
-                </button>
-              </span>
-              <button
-                v-else
-                class="rounded-md px-2 py-0.5 text-[12px] transition-colors hover:bg-[var(--hover)]"
-                style="color: var(--text-secondary)"
-                :disabled="checking"
-                @click="checkUpdate(false)"
-              >
-                {{ checking ? "检查中…" : "检查更新" }}
-              </button>
-            </div>
-            <p
-              v-if="checkedManually && !updating && !updateAvailable && !checking && !updateError"
-              class="mt-1 text-[11px]"
-              style="color: var(--text-tertiary)"
-            >
-              已是最新版本
-            </p>
-            <p v-if="updateError" class="mt-1 text-[11px]" style="color: #ff3b30">
-              {{ updateError }}
-            </p>
-
-            <div class="my-2.5 border-t" style="border-color: var(--border-subtle)" />
-
-            <!-- 诊断信息 -->
-            <div class="space-y-1 text-[11px]" style="color: var(--text-tertiary)">
-              <div>已加载任务：{{ store.tasks.length }} 条</div>
-              <div class="break-all">数据目录：{{ dataDir || "…" }}</div>
-              <div v-if="store.initError" style="color: #ff3b30" class="break-all">
-                数据层错误：{{ store.initError }}
-              </div>
-            </div>
-            <button
-              type="button"
-              class="mt-1.5 flex items-center gap-1.5 rounded-md px-1.5 py-1 text-[12px] transition-colors hover:bg-[var(--hover)]"
-              style="color: var(--text-secondary)"
-              title="备份时直接复制这个文件即可"
-              @click="revealDatabase"
-            >
-              <FolderOpen :size="13" aria-hidden="true" />
-              在文件夹中显示 workspace.db
-            </button>
-          </template>
-          <div v-else class="flex flex-col gap-3">
+          <div class="flex flex-col gap-3">
             <div class="text-[12px]" style="color: var(--text-tertiary)">
-              Web 版 · 已载入 {{ store.tasks.length }} 条任务
+              已载入 {{ store.tasks.length }} 条任务
             </div>
             <button
               type="button"
