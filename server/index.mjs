@@ -208,9 +208,10 @@ function json(res, status, data, headers = {}) {
 async function readBody(req) {
   const chunks = [];
   let size = 0;
+  // 灵感速记支持图片（dataURL 内嵌），放宽到 12MB
   for await (const c of req) {
     size += c.length;
-    if (size > 1024 * 1024) throw new Error("request body too large");
+    if (size > 12 * 1024 * 1024) throw new Error("request body too large");
     chunks.push(c);
   }
   if (!chunks.length) return {};

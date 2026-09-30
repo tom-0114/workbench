@@ -2,9 +2,12 @@
 import { computed, nextTick, reactive, ref, watch } from "vue";
 import {
   Check,
+  ChevronDown,
+  ClipboardCopy,
   ExternalLink,
   FileText,
   History,
+  Image as ImageIcon,
   Lightbulb,
   ListChecks,
   MoreHorizontal,
@@ -17,8 +20,10 @@ import {
 } from "lucide-vue-next";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useProjectStore } from "@/stores/projects";
-import type { Project, ProjectRequirement } from "@/lib/project-types";
+import type { InspirationType, Project, ProjectRequirement } from "@/lib/project-types";
 import { COLOR_META, STATUS_META, fmtTime } from "@/lib/project-types";
+import { compressImageToDataUrl } from "@/lib/image";
+import { marked } from "marked";
 
 const props = defineProps<{ project: Project; isMobile?: boolean }>();
 const emit = defineEmits<{
@@ -71,9 +76,9 @@ function removeTag(tag: string) {
   store.updateProject(props.project.id, { tags: props.project.tags.filter((t) => t !== tag) });
 }
 
-/* ---- 灵感速记 ---- */
+/* ---- 灵感速记：文本 / Markdown / 图片，无字数上限 ---- */
 const DRAFT_KEY = "wb.pwb.drafts";
-type Drafts = Record<string, { idea?: string; req?: ReqDraft }>;
+type Drafts = Record<string, { idea?: string; ideaType?: InspirationType; req?: ReqDraft }>;
 
 interface ReqDraft {
   targetUsers: string;
@@ -81,6 +86,12 @@ interface ReqDraft {
   featuresText: string;
   notes: string;
 }
+
+const IDEA_TYPES: Array<{ key: InspirationType; label: string; hint: string }> = [
+  { key: "text", label: "文本", hint: "快速记录你的灵感、想法、参考方向……" },
+  { key: "markdown", label: "Markdown", hint: "支持 Markdown：# 标题、**加粗**、- 列表、`代码`……" },
+  { key: "image", label: "图片", hint: "点击选择图片，大图会自动压缩后保存" },
+];
 
 function loadDrafts(): Drafts {
   try {
@@ -98,24 +109,154 @@ function saveDrafts(drafts: Drafts) {
 }
 
 const ideaDraft = ref("");
+const ideaType = ref<InspirationType>("text");
+const pendingImageData = ref<string | null>(null);
+const imageBusy = ref(false);
 const reqDraft = reactive<ReqDraft>({ targetUsers: "", coreNeeds: "", featuresText: "", notes: "" });
 const lastSavedAt = ref<string>("");
 const justSaved = ref(false);
 const ideaAdded = ref(false);
 const reqAdded = ref(false);
-const IDEA_LIMIT = 500;
+const copiedAll = ref(false);
+const copiedId = ref<string | null>(null);
 
 function flashAdded(flag: { value: boolean }) {
   flag.value = true;
   window.setTimeout(() => (flag.value = false), 1200);
 }
 
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
+  }
+}
+
+function insType(ins: { type?: InspirationType }): InspirationType {
+  return ins.type ?? "text";
+}
+
+const INS_BADGE: Record<InspirationType, { label: string; cls: string }> = {
+  text: { label: "文本", cls: "is-text" },
+  markdown: { label: "MD", cls: "is-markdown" },
+  image: { label: "图片", cls: "is-image" },
+};
+
+/** 超过这个长度的灵感默认折叠，可展开收起 */
+const CLAMP_CHARS = 160;
+const expandedIds = reactive(new Set<string>());
+function needsClamp(ins: { content: string; type?: InspirationType }): boolean {
+  return insType(ins) !== "image" && ins.content.length > CLAMP_CHARS;
+}
+function toggleExpand(insId: string) {
+  if (expandedIds.has(insId)) expandedIds.delete(insId);
+  else expandedIds.add(insId);
+}
+
+function renderMd(src: string): string {
+  try {
+    return marked.parse(src, { async: false, breaks: true, gfm: true }) as string;
+  } catch {
+    return src;
+  }
+}
+
+async function onImagePicked(e: Event) {
+  const input = e.target as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file) return;
+  imageBusy.value = true;
+  try {
+    pendingImageData.value = await compressImageToDataUrl(file);
+  } finally {
+    imageBusy.value = false;
+    input.value = "";
+  }
+}
+
+function setIdeaType(t: InspirationType) {
+  ideaType.value = t;
+  if (t !== "image") pendingImageData.value = null;
+}
+
+function addIdea() {
+  if (ideaType.value === "image") {
+    if (!pendingImageData.value) return;
+    store.addInspiration(props.project.id, pendingImageData.value, "image");
+    pendingImageData.value = null;
+  } else {
+    if (!ideaDraft.value.trim()) return;
+    store.addInspiration(props.project.id, ideaDraft.value, ideaType.value);
+    ideaDraft.value = "";
+  }
+  persistDraft();
+  flashAdded(ideaAdded);
+}
+
+async function copyAllIns() {
+  if (!props.project.inspirations.length) return;
+  const text = props.project.inspirations
+    .map((i) => (insType(i) === "image" ? "[图片]" : i.content))
+    .join("\n\n");
+  if (await copyText(text)) flashAdded(copiedAll);
+}
+
+async function copyOneIns(ins: { id: string; content: string }) {
+  if (await copyText(ins.content)) {
+    copiedId.value = ins.id;
+    window.setTimeout(() => {
+      if (copiedId.value === ins.id) copiedId.value = null;
+    }, 1200);
+  }
+}
+
+/* ---- 灵感编辑（文本/Markdown） ---- */
+const editingInsId = ref<string | null>(null);
+const editInsText = ref("");
+const editInsInput = ref<HTMLTextAreaElement>();
+
+function startEditIns(ins: { id: string; content: string; type?: InspirationType }) {
+  editingInsId.value = ins.id;
+  editInsText.value = ins.content;
+  nextTick(() => editInsInput.value?.focus());
+}
+function saveEditIns(ins: { id: string; type?: InspirationType }) {
+  if (editInsText.value.trim()) {
+    store.updateInspiration(props.project.id, ins.id, editInsText.value);
+  }
+  editingInsId.value = null;
+}
+
+/* ---- 图片灯箱 ---- */
+const lightbox = ref<string | null>(null);
+function openImage(src: string) {
+  lightbox.value = src;
+}
+
+/* ---- 需求整理：默认折叠 ---- */
+const reqOpen = ref(false);
+
 watch(
   () => props.project.id,
   () => {
     const draft = loadDrafts()[props.project.id] ?? {};
     ideaDraft.value = draft.idea ?? "";
+    ideaType.value = draft.ideaType ?? "text";
+    pendingImageData.value = null;
     Object.assign(reqDraft, { targetUsers: "", coreNeeds: "", featuresText: "", notes: "" }, draft.req ?? {});
+    reqOpen.value = false;
+    expandedIds.clear();
+    editingInsId.value = null;
   },
   { immediate: true },
 );
@@ -124,6 +265,7 @@ function persistDraft() {
   const drafts = loadDrafts();
   drafts[props.project.id] = {
     idea: ideaDraft.value,
+    ideaType: ideaType.value,
     req: {
       targetUsers: reqDraft.targetUsers,
       coreNeeds: reqDraft.coreNeeds,
@@ -139,21 +281,13 @@ function persistDraft() {
 
 const IDEA_CHIPS = ["AI 自动整理笔记", "支持多端同步", "更简洁的编辑体验", "数据可视化报表", "移动端适配", "社区分享"];
 function applyChip(chip: string) {
-  if (ideaDraft.value.length + chip.length > IDEA_LIMIT) return;
   if (ideaDraft.value && !ideaDraft.value.endsWith("\n")) ideaDraft.value += "\n";
   ideaDraft.value += chip;
 }
 
-function addIdea() {
-  if (!ideaDraft.value.trim()) return;
-  store.addInspiration(props.project.id, ideaDraft.value);
-  ideaDraft.value = "";
-  persistDraft();
-  flashAdded(ideaAdded);
-}
-
 function ideaToRequirement(content: string) {
   reqDraft.coreNeeds = content.slice(0, 60);
+  reqOpen.value = true;
   persistDraft();
   activeTab.value = "ideas";
 }
@@ -428,62 +562,182 @@ function openFile(url: string) {
                 随时记录闪现的想法，不错过任何一个灵感
               </p>
             </div>
+            <button
+              type="button"
+              class="wpb-secondary-btn shrink-0"
+              :disabled="!project.inspirations.length"
+              title="复制本项目全部灵感内容"
+              @click="copyAllIns"
+            >
+              <Check v-if="copiedAll" :size="13" />
+              <ClipboardCopy v-else :size="13" />
+              {{ copiedAll ? "已复制" : "复制全部" }}
+            </button>
           </div>
+
           <div class="mt-3">
-            <textarea
-              v-model="ideaDraft"
-              class="wpb-textarea"
-              :maxlength="IDEA_LIMIT"
-              rows="3"
-              placeholder="快速记录你的灵感、想法、参考方向……"
-            />
-            <div class="mt-1 text-right text-[11px]" style="color: var(--text-tertiary)">
-              {{ ideaDraft.length }}/{{ IDEA_LIMIT }}
+            <div class="wpb-seg wpb-seg-sm" role="group" aria-label="灵感格式">
+              <button
+                v-for="t in IDEA_TYPES"
+                :key="t.key"
+                type="button"
+                :class="ideaType === t.key ? 'is-active' : ''"
+                :aria-pressed="ideaType === t.key"
+                @click="setIdeaType(t.key)"
+              >
+                <ImageIcon v-if="t.key === 'image'" :size="12" />
+                {{ t.label }}
+              </button>
+            </div>
+
+            <template v-if="ideaType !== 'image'">
+              <textarea
+                v-model="ideaDraft"
+                class="wpb-textarea mt-2"
+                rows="4"
+                :placeholder="IDEA_TYPES.find((t) => t.key === ideaType)?.hint"
+                @change="persistDraft"
+              />
+              <div class="mt-2 flex flex-wrap items-center gap-1.5">
+                <button
+                  v-for="chip in IDEA_CHIPS"
+                  :key="chip"
+                  type="button"
+                  class="wpb-chip"
+                  :title="`写入：${chip}`"
+                  @click="applyChip(chip)"
+                >
+                  {{ chip }}
+                </button>
+              </div>
+            </template>
+            <label v-else class="wpb-img-picker mt-2" :class="{ 'is-busy': imageBusy }">
+              <input type="file" accept="image/*" class="wpb-img-input" @change="onImagePicked" />
+              <img v-if="pendingImageData" :src="pendingImageData" class="wpb-img-preview" alt="待添加的图片" />
+              <span v-else class="wpb-img-hint">
+                <ImageIcon :size="18" />
+                {{ imageBusy ? "正在压缩图片…" : IDEA_TYPES[2].hint }}
+              </span>
+              <button
+                v-if="pendingImageData"
+                type="button"
+                class="wpb-mini-btn wpb-img-remove"
+                title="移除图片"
+                @click.prevent="pendingImageData = null"
+              >
+                <X :size="12" />
+              </button>
+            </label>
+
+            <div class="mt-3 flex justify-end">
+              <button
+                type="button"
+                class="wpb-primary-btn"
+                :disabled="ideaType === 'image' ? !pendingImageData : !ideaDraft.trim()"
+                @click="addIdea"
+              >
+                <Check v-if="ideaAdded" :size="14" />
+                <Plus v-else :size="14" />
+                {{ ideaAdded ? "已添加" : "添加灵感" }}
+              </button>
             </div>
           </div>
-          <div class="mt-2 flex flex-wrap items-center gap-1.5">
-            <button
-              v-for="chip in IDEA_CHIPS"
-              :key="chip"
-              type="button"
-              class="wpb-chip"
-              :title="`写入：${chip}`"
-              @click="applyChip(chip)"
-            >
-              {{ chip }}
-            </button>
-          </div>
-          <div class="mt-3 flex justify-end">
-            <button type="button" class="wpb-primary-btn" :disabled="!ideaDraft.trim() && !ideaAdded" @click="addIdea">
-              <Check v-if="ideaAdded" :size="14" />
-              <Plus v-else :size="14" />
-              {{ ideaAdded ? "已添加" : "添加灵感" }}
-            </button>
-          </div>
+
           <ul v-if="project.inspirations.length" class="mt-2 space-y-1.5">
             <li v-for="ins in project.inspirations" :key="ins.id" class="wpb-idea-row">
-              <Lightbulb :size="13" class="shrink-0" style="color: #e6a700" />
-              <div class="min-w-0 flex-1">
-                <p class="whitespace-pre-wrap break-words text-[13px]">{{ ins.content }}</p>
-                <span class="text-[11px]" style="color: var(--text-tertiary)">{{ fmtTime(ins.createdAt) }}</span>
-              </div>
-              <button
-                type="button"
-                class="wpb-mini-btn"
-                title="把这个灵感整理成需求"
-                @click="ideaToRequirement(ins.content)"
-              >
-                <Target :size="12" />
-                转需求
-              </button>
-              <button
-                type="button"
-                class="wpb-mini-btn is-danger"
-                title="删除灵感"
-                @click="store.removeInspiration(project.id, ins.id)"
-              >
-                <Trash2 :size="12" />
-              </button>
+              <template v-if="editingInsId === ins.id">
+                <textarea
+                  ref="editInsInput"
+                  v-model="editInsText"
+                  class="wpb-textarea min-h-0 flex-1"
+                  rows="5"
+                  @keydown.esc="editingInsId = null"
+                />
+                <div class="flex w-full justify-end gap-2">
+                  <button type="button" class="wpb-secondary-btn" @click="editingInsId = null">取消</button>
+                  <button type="button" class="wpb-primary-btn" @click="saveEditIns(ins)">
+                    <Check :size="13" /> 保存
+                  </button>
+                </div>
+              </template>
+              <template v-else>
+                <span class="wpb-ins-badge" :class="INS_BADGE[insType(ins)].cls">
+                  {{ INS_BADGE[insType(ins)].label }}
+                </span>
+                <div class="min-w-0 flex-1">
+                  <button
+                    v-if="insType(ins) === 'image'"
+                    type="button"
+                    class="wpb-ins-img-btn"
+                    title="查看原图"
+                    @click="openImage(ins.content)"
+                  >
+                    <img :src="ins.content" class="wpb-ins-img" alt="灵感图片" />
+                  </button>
+                  <div
+                    v-else-if="insType(ins) === 'markdown'"
+                    class="wpb-md wpb-ins-body"
+                    :class="{ 'is-clamped': needsClamp(ins) && !expandedIds.has(ins.id) }"
+                    v-html="renderMd(ins.content)"
+                  />
+                  <p
+                    v-else
+                    class="wpb-ins-body whitespace-pre-wrap break-words text-[13px]"
+                    :class="{ 'is-clamped': needsClamp(ins) && !expandedIds.has(ins.id) }"
+                  >
+                    {{ ins.content }}
+                  </p>
+                  <button
+                    v-if="needsClamp(ins)"
+                    type="button"
+                    class="wpb-mini-btn mt-0.5"
+                    @click="toggleExpand(ins.id)"
+                  >
+                    {{ expandedIds.has(ins.id) ? "收起" : "展开全文" }}
+                  </button>
+                  <div class="mt-0.5 text-[11px]" style="color: var(--text-tertiary)">
+                    {{ fmtTime(ins.createdAt) }}
+                  </div>
+                </div>
+                <div class="flex flex-none items-start gap-0.5">
+                  <button
+                    type="button"
+                    class="wpb-mini-btn"
+                    :title="copiedId === ins.id ? '已复制' : '复制内容'"
+                    @click="copyOneIns(ins)"
+                  >
+                    <Check v-if="copiedId === ins.id" :size="12" />
+                    <ClipboardCopy v-else :size="12" />
+                  </button>
+                  <button
+                    v-if="insType(ins) !== 'image'"
+                    type="button"
+                    class="wpb-mini-btn"
+                    title="编辑灵感"
+                    @click="startEditIns(ins)"
+                  >
+                    <Pencil :size="12" />
+                  </button>
+                  <button
+                    v-if="insType(ins) !== 'image'"
+                    type="button"
+                    class="wpb-mini-btn"
+                    title="把这个灵感整理成需求"
+                    @click="ideaToRequirement(ins.content)"
+                  >
+                    <Target :size="12" />
+                    转需求
+                  </button>
+                  <button
+                    type="button"
+                    class="wpb-mini-btn is-danger"
+                    title="删除灵感"
+                    @click="store.removeInspiration(project.id, ins.id)"
+                  >
+                    <Trash2 :size="12" />
+                  </button>
+                </div>
+              </template>
             </li>
           </ul>
           <p v-else class="mt-2 text-[12px]" style="color: var(--text-tertiary)">
@@ -492,17 +746,26 @@ function openFile(url: string) {
         </div>
 
         <div class="wpb-panel">
-          <div class="flex items-center gap-2">
+          <button
+            type="button"
+            class="wpb-panel-header"
+            :aria-expanded="reqOpen"
+            @click="reqOpen = !reqOpen"
+          >
             <span class="wpb-panel-icon" style="background: rgba(0, 122, 255, 0.1)">📋</span>
-            <div class="min-w-0 flex-1">
-              <h3 class="wpb-panel-title">需求整理</h3>
-              <p class="text-[12px]" style="color: var(--text-tertiary)">
-                把灵感沉淀为结构化需求，想清楚再做
-              </p>
-            </div>
-          </div>
+            <span class="min-w-0 flex-1">
+              <span class="wpb-panel-title block">需求整理</span>
+              <span class="block text-[12px]" style="color: var(--text-tertiary)">
+                {{ reqOpen
+                  ? "把灵感沉淀为结构化需求，想清楚再做"
+                  : `已整理 ${project.requirements.length} 条需求，点击展开查看与添加`
+                }}
+              </span>
+            </span>
+            <ChevronDown :size="15" class="wpb-panel-chevron" :class="reqOpen ? 'is-open' : ''" aria-hidden="true" />
+          </button>
 
-          <div class="mt-3 space-y-3">
+          <div v-show="reqOpen" class="mt-3 space-y-3">
             <div class="wpb-req-field">
               <label class="wpb-req-label"><span class="wpb-req-icon">👤</span> 目标用户</label>
               <input
@@ -546,19 +809,19 @@ function openFile(url: string) {
                 @change="persistDraft"
               />
             </div>
-          </div>
-          <p v-if="reqFormError" class="mt-2 text-[12px] text-destructive">{{ reqFormError }}</p>
 
-          <div class="mt-3 flex justify-end">
-            <button type="button" class="wpb-primary-btn" @click="addRequirement">
-              <Check v-if="reqAdded" :size="14" />
-              <Plus v-else :size="14" />
-              {{ reqAdded ? "已添加" : "添加需求" }}
-            </button>
-          </div>
+            <p v-if="reqFormError" class="text-[12px] text-destructive">{{ reqFormError }}</p>
 
-          <!-- 已整理需求列表 -->
-          <ul v-if="project.requirements.length" class="mt-3 space-y-2">
+            <div class="flex justify-end">
+              <button type="button" class="wpb-primary-btn" @click="addRequirement">
+                <Check v-if="reqAdded" :size="14" />
+                <Plus v-else :size="14" />
+                {{ reqAdded ? "已添加" : "添加需求" }}
+              </button>
+            </div>
+
+            <!-- 已整理需求列表 -->
+            <ul v-if="project.requirements.length" class="space-y-2">
             <li v-for="(req, index) in project.requirements" :key="req.id" class="wpb-req-item">
               <template v-if="editingReqId === req.id">
                 <div class="space-y-2">
@@ -619,6 +882,10 @@ function openFile(url: string) {
               </template>
             </li>
           </ul>
+          <p v-else class="mt-3 text-[12px]" style="color: var(--text-tertiary)">
+            还没有整理过需求。展开表单，把灵感沉淀成清晰的目标用户、核心需求和功能点。
+          </p>
+          </div>
         </div>
 
         <!-- 底部保存条 -->
@@ -765,6 +1032,17 @@ function openFile(url: string) {
           <p v-else class="mt-2 text-[12px]" style="color: var(--text-tertiary)">暂无动态</p>
         </div>
       </div>
+    </div>
+
+    <!-- 图片灯箱 -->
+    <div
+      v-if="lightbox"
+      class="wpb-lightbox"
+      role="dialog"
+      aria-label="查看图片"
+      @click="lightbox = null"
+    >
+      <img :src="lightbox" alt="灵感图片原图" />
     </div>
   </section>
 </template>

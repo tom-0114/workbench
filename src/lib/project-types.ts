@@ -2,9 +2,12 @@
 
 export type ProjectStatus = "active" | "organizing" | "done"; // 进行中 / 待整理 / 已完成
 
+export type InspirationType = "text" | "markdown" | "image";
+
 export interface ProjectInspiration {
   id: string;
-  content: string;
+  content: string; // 文本/Markdown 原文；图片为 dataURL
+  type?: InspirationType; // 早期数据无类型，按 text 处理
   createdAt: string;
 }
 

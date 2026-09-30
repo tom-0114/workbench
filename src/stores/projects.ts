@@ -376,12 +376,21 @@ export const useProjectStore = defineStore("projects", () => {
     });
   }
 
-  function addInspiration(id: string, content: string) {
+  function addInspiration(id: string, content: string, type: ProjectInspiration["type"] = "text") {
     const project = projects.value.find((p) => p.id === id);
     if (!project || !content.trim()) return;
-    const item: ProjectInspiration = { id: newId(), content: content.trim(), createdAt: nowIso() };
+    const item: ProjectInspiration = { id: newId(), content: content.trim(), type, createdAt: nowIso() };
     project.inspirations.unshift(item);
-    log(project, "记录了一条灵感");
+    log(project, type === "image" ? "记录了一张图片灵感" : "记录了一条灵感");
+    touch(project);
+  }
+
+  function updateInspiration(id: string, insId: string, content: string) {
+    const project = projects.value.find((p) => p.id === id);
+    const ins = project?.inspirations.find((i) => i.id === insId);
+    if (!project || !ins || !content.trim()) return;
+    ins.content = content.trim();
+    log(project, "编辑了一条灵感");
     touch(project);
   }
 
@@ -488,6 +497,7 @@ export const useProjectStore = defineStore("projects", () => {
     restoreProject,
     permanentlyDelete,
     addInspiration,
+    updateInspiration,
     removeInspiration,
     addRequirement,
     updateRequirement,
