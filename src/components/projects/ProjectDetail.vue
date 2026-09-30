@@ -76,9 +76,9 @@ function removeTag(tag: string) {
   store.updateProject(props.project.id, { tags: props.project.tags.filter((t) => t !== tag) });
 }
 
-/* ---- 灵感速记：文本 / Markdown / 图片，无字数上限 ---- */
+/* ---- 灵感速记：统一 Markdown 编辑器（支持文字与内嵌图片），无字数上限 ---- */
 const DRAFT_KEY = "wb.pwb.drafts";
-type Drafts = Record<string, { idea?: string; ideaType?: InspirationType; req?: ReqDraft }>;
+type Drafts = Record<string, { idea?: string; req?: ReqDraft }>;
 
 interface ReqDraft {
   targetUsers: string;
@@ -86,12 +86,6 @@ interface ReqDraft {
   featuresText: string;
   notes: string;
 }
-
-const IDEA_TYPES: Array<{ key: InspirationType; label: string; hint: string }> = [
-  { key: "text", label: "文本", hint: "快速记录你的灵感、想法、参考方向……" },
-  { key: "markdown", label: "Markdown", hint: "支持 Markdown：# 标题、**加粗**、- 列表、`代码`……" },
-  { key: "image", label: "图片", hint: "点击选择图片，大图会自动压缩后保存" },
-];
 
 function loadDrafts(): Drafts {
   try {
@@ -109,8 +103,7 @@ function saveDrafts(drafts: Drafts) {
 }
 
 const ideaDraft = ref("");
-const ideaType = ref<InspirationType>("text");
-const pendingImageData = ref<string | null>(null);
+const ideaInput = ref<HTMLTextAreaElement>();
 const imageBusy = ref(false);
 const reqDraft = reactive<ReqDraft>({ targetUsers: "", coreNeeds: "", featuresText: "", notes: "" });
 const lastSavedAt = ref<string>("");
@@ -146,17 +139,22 @@ function insType(ins: { type?: InspirationType }): InspirationType {
   return ins.type ?? "text";
 }
 
-const INS_BADGE: Record<InspirationType, { label: string; cls: string }> = {
-  text: { label: "文本", cls: "is-text" },
-  markdown: { label: "MD", cls: "is-markdown" },
-  image: { label: "图片", cls: "is-image" },
-};
+/** 早期版本存整张图为 content 的旧数据 */
+function isLegacyImage(ins: { content: string; type?: InspirationType }): boolean {
+  return insType(ins) === "image" || /^data:image\//.test(ins.content.trim());
+}
 
-/** 超过这个长度的灵感默认折叠，可展开收起 */
+/** 复制给外部时把内嵌 base64 图片替换成占位符 */
+const MD_IMG_RE = /!\[([^\]]*)\]\(data:image\/[^;]+;base64,[^)]+\)/g;
+function copyableText(src: string): string {
+  return src.replace(MD_IMG_RE, (_m, alt: string) => `[图片${alt ? `：${alt}` : ""}]`);
+}
+
+/** 超过这个长度的灵感默认折叠，可展开收起（含内嵌图片的不折叠，避免裁切） */
 const CLAMP_CHARS = 160;
 const expandedIds = reactive(new Set<string>());
-function needsClamp(ins: { content: string; type?: InspirationType }): boolean {
-  return insType(ins) !== "image" && ins.content.length > CLAMP_CHARS;
+function needsClamp(ins: { content: string }): boolean {
+  return !ins.content.includes("data:image") && ins.content.length > CLAMP_CHARS;
 }
 function toggleExpand(insId: string) {
   if (expandedIds.has(insId)) expandedIds.delete(insId);
@@ -171,34 +169,42 @@ function renderMd(src: string): string {
   }
 }
 
+/** 渲染稿里的图片点击查看原图 */
+function onMdClick(e: MouseEvent) {
+  const target = e.target as HTMLElement;
+  if (target.tagName === "IMG") {
+    const src = (target as HTMLImageElement).getAttribute("src");
+    if (src) openImage(src);
+  }
+}
+
 async function onImagePicked(e: Event) {
   const input = e.target as HTMLInputElement;
   const file = input.files?.[0];
   if (!file) return;
   imageBusy.value = true;
   try {
-    pendingImageData.value = await compressImageToDataUrl(file);
+    const dataUrl = await compressImageToDataUrl(file);
+    const snippet = `\n![图片](${dataUrl})\n`;
+    const ta = ideaInput.value;
+    const pos = ta?.selectionStart ?? ideaDraft.value.length;
+    ideaDraft.value = ideaDraft.value.slice(0, pos) + snippet + ideaDraft.value.slice(pos);
+    persistDraft();
+    nextTick(() => {
+      ta?.focus();
+      const at = pos + snippet.length;
+      ta?.setSelectionRange(at, at);
+    });
   } finally {
     imageBusy.value = false;
     input.value = "";
   }
 }
 
-function setIdeaType(t: InspirationType) {
-  ideaType.value = t;
-  if (t !== "image") pendingImageData.value = null;
-}
-
 function addIdea() {
-  if (ideaType.value === "image") {
-    if (!pendingImageData.value) return;
-    store.addInspiration(props.project.id, pendingImageData.value, "image");
-    pendingImageData.value = null;
-  } else {
-    if (!ideaDraft.value.trim()) return;
-    store.addInspiration(props.project.id, ideaDraft.value, ideaType.value);
-    ideaDraft.value = "";
-  }
+  if (!ideaDraft.value.trim()) return;
+  store.addInspiration(props.project.id, ideaDraft.value, "markdown");
+  ideaDraft.value = "";
   persistDraft();
   flashAdded(ideaAdded);
 }
@@ -206,13 +212,14 @@ function addIdea() {
 async function copyAllIns() {
   if (!props.project.inspirations.length) return;
   const text = props.project.inspirations
-    .map((i) => (insType(i) === "image" ? "[图片]" : i.content))
-    .join("\n\n");
+    .map((i) => (isLegacyImage(i) ? "[图片]" : copyableText(i.content)))
+    .join("\n\n---\n\n");
   if (await copyText(text)) flashAdded(copiedAll);
 }
 
 async function copyOneIns(ins: { id: string; content: string }) {
-  if (await copyText(ins.content)) {
+  const raw = isLegacyImage(ins) ? ins.content : copyableText(ins.content);
+  if (await copyText(raw)) {
     copiedId.value = ins.id;
     window.setTimeout(() => {
       if (copiedId.value === ins.id) copiedId.value = null;
@@ -220,17 +227,17 @@ async function copyOneIns(ins: { id: string; content: string }) {
   }
 }
 
-/* ---- 灵感编辑（文本/Markdown） ---- */
+/* ---- 灵感编辑 ---- */
 const editingInsId = ref<string | null>(null);
 const editInsText = ref("");
 const editInsInput = ref<HTMLTextAreaElement>();
 
-function startEditIns(ins: { id: string; content: string; type?: InspirationType }) {
+function startEditIns(ins: { id: string; content: string }) {
   editingInsId.value = ins.id;
   editInsText.value = ins.content;
   nextTick(() => editInsInput.value?.focus());
 }
-function saveEditIns(ins: { id: string; type?: InspirationType }) {
+function saveEditIns(ins: { id: string }) {
   if (editInsText.value.trim()) {
     store.updateInspiration(props.project.id, ins.id, editInsText.value);
   }
@@ -251,8 +258,6 @@ watch(
   () => {
     const draft = loadDrafts()[props.project.id] ?? {};
     ideaDraft.value = draft.idea ?? "";
-    ideaType.value = draft.ideaType ?? "text";
-    pendingImageData.value = null;
     Object.assign(reqDraft, { targetUsers: "", coreNeeds: "", featuresText: "", notes: "" }, draft.req ?? {});
     reqOpen.value = false;
     expandedIds.clear();
@@ -265,7 +270,6 @@ function persistDraft() {
   const drafts = loadDrafts();
   drafts[props.project.id] = {
     idea: ideaDraft.value,
-    ideaType: ideaType.value,
     req: {
       targetUsers: reqDraft.targetUsers,
       coreNeeds: reqDraft.coreNeeds,
@@ -576,64 +580,37 @@ function openFile(url: string) {
           </div>
 
           <div class="mt-3">
-            <div class="wpb-seg wpb-seg-sm" role="group" aria-label="灵感格式">
+            <textarea
+              ref="ideaInput"
+              v-model="ideaDraft"
+              class="wpb-textarea"
+              rows="5"
+              placeholder="记录灵感…支持 Markdown：# 标题、**加粗**、- 列表、`代码`，可插入图片"
+              @change="persistDraft"
+            />
+            <div class="mt-2 flex flex-wrap items-center gap-1.5">
+              <label class="wpb-chip wpb-file-chip" :class="{ 'is-busy': imageBusy }" title="插入图片（自动压缩到 1600px）">
+                <input type="file" accept="image/*" class="wpb-img-input" @change="onImagePicked" />
+                <ImageIcon :size="12" />
+                {{ imageBusy ? "处理中…" : "插入图片" }}
+              </label>
               <button
-                v-for="t in IDEA_TYPES"
-                :key="t.key"
+                v-for="chip in IDEA_CHIPS"
+                :key="chip"
                 type="button"
-                :class="ideaType === t.key ? 'is-active' : ''"
-                :aria-pressed="ideaType === t.key"
-                @click="setIdeaType(t.key)"
+                class="wpb-chip"
+                :title="`写入：${chip}`"
+                @click="applyChip(chip)"
               >
-                <ImageIcon v-if="t.key === 'image'" :size="12" />
-                {{ t.label }}
+                {{ chip }}
               </button>
             </div>
-
-            <template v-if="ideaType !== 'image'">
-              <textarea
-                v-model="ideaDraft"
-                class="wpb-textarea mt-2"
-                rows="4"
-                :placeholder="IDEA_TYPES.find((t) => t.key === ideaType)?.hint"
-                @change="persistDraft"
-              />
-              <div class="mt-2 flex flex-wrap items-center gap-1.5">
-                <button
-                  v-for="chip in IDEA_CHIPS"
-                  :key="chip"
-                  type="button"
-                  class="wpb-chip"
-                  :title="`写入：${chip}`"
-                  @click="applyChip(chip)"
-                >
-                  {{ chip }}
-                </button>
-              </div>
-            </template>
-            <label v-else class="wpb-img-picker mt-2" :class="{ 'is-busy': imageBusy }">
-              <input type="file" accept="image/*" class="wpb-img-input" @change="onImagePicked" />
-              <img v-if="pendingImageData" :src="pendingImageData" class="wpb-img-preview" alt="待添加的图片" />
-              <span v-else class="wpb-img-hint">
-                <ImageIcon :size="18" />
-                {{ imageBusy ? "正在压缩图片…" : IDEA_TYPES[2].hint }}
-              </span>
-              <button
-                v-if="pendingImageData"
-                type="button"
-                class="wpb-mini-btn wpb-img-remove"
-                title="移除图片"
-                @click.prevent="pendingImageData = null"
-              >
-                <X :size="12" />
-              </button>
-            </label>
 
             <div class="mt-3 flex justify-end">
               <button
                 type="button"
                 class="wpb-primary-btn"
-                :disabled="ideaType === 'image' ? !pendingImageData : !ideaDraft.trim()"
+                :disabled="!ideaDraft.trim()"
                 @click="addIdea"
               >
                 <Check v-if="ideaAdded" :size="14" />
@@ -646,27 +623,26 @@ function openFile(url: string) {
           <ul v-if="project.inspirations.length" class="mt-2 space-y-1.5">
             <li v-for="ins in project.inspirations" :key="ins.id" class="wpb-idea-row">
               <template v-if="editingInsId === ins.id">
-                <textarea
-                  ref="editInsInput"
-                  v-model="editInsText"
-                  class="wpb-textarea min-h-0 flex-1"
-                  rows="5"
-                  @keydown.esc="editingInsId = null"
-                />
-                <div class="flex w-full justify-end gap-2">
-                  <button type="button" class="wpb-secondary-btn" @click="editingInsId = null">取消</button>
-                  <button type="button" class="wpb-primary-btn" @click="saveEditIns(ins)">
-                    <Check :size="13" /> 保存
-                  </button>
+                <div class="min-w-0 flex-1 space-y-2">
+                  <textarea
+                    ref="editInsInput"
+                    v-model="editInsText"
+                    class="wpb-textarea"
+                    rows="6"
+                    @keydown.esc="editingInsId = null"
+                  />
+                  <div class="flex justify-end gap-2">
+                    <button type="button" class="wpb-secondary-btn" @click="editingInsId = null">取消</button>
+                    <button type="button" class="wpb-primary-btn" @click="saveEditIns(ins)">
+                      <Check :size="13" /> 保存
+                    </button>
+                  </div>
                 </div>
               </template>
               <template v-else>
-                <span class="wpb-ins-badge" :class="INS_BADGE[insType(ins)].cls">
-                  {{ INS_BADGE[insType(ins)].label }}
-                </span>
                 <div class="min-w-0 flex-1">
                   <button
-                    v-if="insType(ins) === 'image'"
+                    v-if="isLegacyImage(ins)"
                     type="button"
                     class="wpb-ins-img-btn"
                     title="查看原图"
@@ -675,18 +651,12 @@ function openFile(url: string) {
                     <img :src="ins.content" class="wpb-ins-img" alt="灵感图片" />
                   </button>
                   <div
-                    v-else-if="insType(ins) === 'markdown'"
+                    v-else
                     class="wpb-md wpb-ins-body"
                     :class="{ 'is-clamped': needsClamp(ins) && !expandedIds.has(ins.id) }"
+                    @click="onMdClick"
                     v-html="renderMd(ins.content)"
                   />
-                  <p
-                    v-else
-                    class="wpb-ins-body whitespace-pre-wrap break-words text-[13px]"
-                    :class="{ 'is-clamped': needsClamp(ins) && !expandedIds.has(ins.id) }"
-                  >
-                    {{ ins.content }}
-                  </p>
                   <button
                     v-if="needsClamp(ins)"
                     type="button"
@@ -710,7 +680,7 @@ function openFile(url: string) {
                     <ClipboardCopy v-else :size="12" />
                   </button>
                   <button
-                    v-if="insType(ins) !== 'image'"
+                    v-if="!isLegacyImage(ins)"
                     type="button"
                     class="wpb-mini-btn"
                     title="编辑灵感"
@@ -719,11 +689,11 @@ function openFile(url: string) {
                     <Pencil :size="12" />
                   </button>
                   <button
-                    v-if="insType(ins) !== 'image'"
+                    v-if="!isLegacyImage(ins)"
                     type="button"
                     class="wpb-mini-btn"
                     title="把这个灵感整理成需求"
-                    @click="ideaToRequirement(ins.content)"
+                    @click="ideaToRequirement(copyableText(ins.content))"
                   >
                     <Target :size="12" />
                     转需求

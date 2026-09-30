@@ -2322,41 +2322,27 @@ body.wb-task-dragging .wb-drop-zone.is-drop-active {
 }
 
 /* =========================================================
-   灵感速记多格式 + 需求整理折叠
+   灵感速记（统一 Markdown 编辑器）+ 需求整理折叠
    ========================================================= */
-.wpb-seg-sm button {
-  padding: 2px 8px;
-  font-size: 11.5px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+/* 内嵌图片（Markdown ![](dataURL)） */
+.wpb-md img {
+  display: block;
+  max-width: 100%;
+  max-height: 240px;
+  margin: 0.3em 0;
+  border-radius: 8px;
+  border: 1px solid var(--border-subtle);
+  cursor: zoom-in;
 }
 
-.wpb-ins-badge {
-  display: inline-flex;
-  align-items: center;
-  flex: none;
-  margin-top: 2px;
-  padding: 1px 6px;
-  border-radius: 5px;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
+/* 「插入图片」chip：整个 chip 是文件选择热区 */
+.wpb-file-chip {
+  position: relative;
+  overflow: hidden;
 }
-.wpb-ins-badge.is-text {
-  color: var(--text-secondary);
-  background: var(--secondary);
-}
-.wpb-ins-badge.is-markdown {
-  color: var(--accent-color);
-  background: color-mix(in srgb, var(--accent-color) 10%, transparent);
-}
-.wpb-ins-badge.is-image {
-  color: #248a3d;
-  background: rgba(52, 199, 89, 0.15);
-}
-.dark .wpb-ins-badge.is-image {
-  color: #30d158;
+.wpb-file-chip.is-busy {
+  opacity: 0.6;
+  pointer-events: none;
 }
 
 /* 过长内容折叠：限高 + 底部渐隐 */
@@ -2466,59 +2452,12 @@ body.wb-task-dragging .wb-drop-zone.is-drop-active {
   border: 1px solid var(--border-subtle);
 }
 
-/* 图片选择器 */
-.wpb-img-picker {
-  position: relative;
-  display: flex;
-  min-height: 110px;
-  align-items: center;
-  justify-content: center;
-  border: 1.5px dashed var(--input, var(--border-subtle));
-  border-radius: 10px;
-  background: var(--bg-secondary);
-  cursor: pointer;
-  transition: border-color 150ms ease-out;
-}
-.wpb-img-picker:hover {
-  border-color: var(--accent-color);
-}
-.wpb-img-picker.is-busy {
-  cursor: wait;
-  opacity: 0.7;
-}
+/* 文件选择输入（藏在 chip 内） */
 .wpb-img-input {
   position: absolute;
   inset: 0;
   cursor: pointer;
   opacity: 0;
-}
-.wpb-img-hint {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 14px;
-  color: var(--text-tertiary);
-  font-size: 12px;
-  text-align: center;
-  pointer-events: none;
-}
-.wpb-img-preview {
-  max-height: 200px;
-  max-width: 100%;
-  border-radius: 8px;
-  pointer-events: none;
-}
-.wpb-img-remove {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  background: var(--card);
-  border: 1px solid var(--border-subtle);
-  border-radius: 6px;
-  width: 22px;
-  height: 22px;
-  padding: 0;
 }
 
 /* 需求整理折叠头 */

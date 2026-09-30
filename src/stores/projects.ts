@@ -376,12 +376,12 @@ export const useProjectStore = defineStore("projects", () => {
     });
   }
 
-  function addInspiration(id: string, content: string, type: ProjectInspiration["type"] = "text") {
+  function addInspiration(id: string, content: string, type: ProjectInspiration["type"] = "markdown") {
     const project = projects.value.find((p) => p.id === id);
     if (!project || !content.trim()) return;
     const item: ProjectInspiration = { id: newId(), content: content.trim(), type, createdAt: nowIso() };
     project.inspirations.unshift(item);
-    log(project, type === "image" ? "记录了一张图片灵感" : "记录了一条灵感");
+    log(project, "记录了一条灵感");
     touch(project);
   }
 
