@@ -2,7 +2,7 @@
 // 数据语义见 src/lib/types.ts：
 //   Task: { id, title, notes, dueDate, priority, tags, repeatRule, completed, deletedAt, createdAt, updatedAt }
 //   completions: "taskId:date" 集合（重复任务按天打卡）
-// 多用户：tasks / projects 按 user_id 隔离，task_completions 经 tasks 间接隔离；仅管理员可创建账号。
+// 多用户：tasks 按 user_id 隔离，task_completions 经 tasks 间接隔离；仅管理员可创建账号。
 // Web API 使用签名 HttpOnly Cookie 鉴权，表结构在启动时自动创建/迁移。
 import { Pool } from "pg";
 import { createServer } from "node:http";
@@ -67,32 +67,13 @@ CREATE TABLE IF NOT EXISTS task_completions (
   PRIMARY KEY (task_id, date)
 );
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS deleted_at TEXT;
-CREATE TABLE IF NOT EXISTS projects (
-  user_id    BIGINT NOT NULL,
-  id         TEXT NOT NULL,
-  data       JSONB NOT NULL,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL,
-  PRIMARY KEY (user_id, id)
-);
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS user_id BIGINT;
-ALTER TABLE projects ADD COLUMN IF NOT EXISTS user_id BIGINT;
 `;
 
-// 单用户时代的旧数据（user_id 为空）回填后再加约束；projects 主键从 (id) 迁到 (user_id, id)
+// 单用户时代的旧数据（user_id 为空）回填后再加约束
 const MIGRATE_CONSTRAINTS = `
 ALTER TABLE tasks ALTER COLUMN user_id SET NOT NULL;
-ALTER TABLE projects ALTER COLUMN user_id SET NOT NULL;
 CREATE INDEX IF NOT EXISTS tasks_user_id_idx ON tasks (user_id);
-DO $$ BEGIN
-  IF EXISTS (
-    SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indrelid
-    WHERE c.relname = 'projects' AND i.indisprimary AND i.indnatts = 1
-  ) THEN
-    ALTER TABLE projects DROP CONSTRAINT projects_pkey;
-    ALTER TABLE projects ADD PRIMARY KEY (user_id, id);
-  END IF;
-END $$;
 `;
 
 /* ---------- 密码 ---------- */
@@ -171,7 +152,6 @@ async function deleteUser(userId) {
       [userId],
     );
     await client.query("DELETE FROM tasks WHERE user_id = $1", [userId]);
-    await client.query("DELETE FROM projects WHERE user_id = $1", [userId]);
     await client.query("DELETE FROM users WHERE id = $1", [userId]);
   });
 }
@@ -210,44 +190,8 @@ async function init() {
       console.log(`[workbench-api] created admin user "${BOOTSTRAP_USERNAME}"`);
     }
     await client.query("UPDATE tasks SET user_id = $1 WHERE user_id IS NULL", [adminId]);
-    await client.query("UPDATE projects SET user_id = $1 WHERE user_id IS NULL", [adminId]);
     await client.query(MIGRATE_CONSTRAINTS);
   });
-}
-
-/* ---------- 项目 ---------- */
-
-const PROJECT_ID_RE = /^[a-z0-9]{2,20}-[a-z0-9]{2,12}$/;
-
-function isValidProject(data) {
-  if (!data || typeof data !== "object" || Array.isArray(data)) return false;
-  if (typeof data.name !== "string" || !data.name.trim() || data.name.length > 80) return false;
-  if (typeof data.description !== "string" || data.description.length > 500) return false;
-  return true;
-}
-
-function rowToProject(r) {
-  return { ...r.data, id: r.id, createdAt: r.created_at, updatedAt: r.updated_at };
-}
-
-async function listProjects(userId) {
-  const { rows } = await pool.query("SELECT * FROM projects WHERE user_id = $1", [userId]);
-  return rows.map(rowToProject);
-}
-
-async function upsertProject(userId, id, data) {
-  const now = new Date().toISOString();
-  const createdAt =
-    typeof data.createdAt === "string" && !Number.isNaN(Date.parse(data.createdAt)) ? data.createdAt : now;
-  await pool.query(
-    `INSERT INTO projects (user_id, id, data, created_at, updated_at) VALUES ($1, $2, $3::jsonb, $4, $5)
-     ON CONFLICT (user_id, id) DO UPDATE SET data = $3::jsonb, updated_at = $5`,
-    [userId, id, JSON.stringify(data), createdAt, now],
-  );
-}
-
-async function deleteProject(userId, id) {
-  await pool.query("DELETE FROM projects WHERE user_id = $1 AND id = $2", [userId, id]);
 }
 
 /* ---------- 任务 ---------- */
@@ -630,23 +574,6 @@ const server = createServer(async (req, res) => {
       return ok ? json(res, 204) : json(res, 404, { error: "任务不存在" });
     }
 
-    // 项目工作台：整份项目文档（含灵感/需求/任务/资料/动态）按 JSONB 存储
-    if (path === "/api/projects" && method === "GET") return json(res, 200, await listProjects(uid));
-    const projectMatch = path.match(/^\/api\/projects\/([a-z0-9-]+)$/);
-    if (projectMatch && method === "PUT") {
-      const id = projectMatch[1];
-      if (!PROJECT_ID_RE.test(id)) return json(res, 400, { error: "参数无效" });
-      const data = await readBody(req);
-      if (!isValidProject(data)) return json(res, 400, { error: "项目数据无效" });
-      delete data.id;
-      await upsertProject(uid, id, data);
-      return json(res, 204);
-    }
-    if (projectMatch && method === "DELETE") {
-      if (!PROJECT_ID_RE.test(projectMatch[1])) return json(res, 400, { error: "参数无效" });
-      await deleteProject(uid, projectMatch[1]);
-      return json(res, 204);
-    }
     return json(res, 404, { error: "not found" });
   } catch (error) {
     console.error(`[workbench-api] ${method} ${path} failed:`, error);

@@ -4,7 +4,6 @@ import {
   CalendarDays,
   ChevronRight,
   Download,
-  FolderKanban,
   Inbox,
   LogOut,
   Plus,
@@ -36,7 +35,6 @@ import RecycleTaskRow from "@/components/RecycleTaskRow.vue";
 const emit = defineEmits<{
   (e: "open-task", occ: Occurrence): void;
   (e: "logout"): void;
-  (e: "open-projects"): void;
 }>();
 const store = useTaskStore();
 const isMobile = useMediaQuery("(max-width: 767px)");
@@ -336,14 +334,6 @@ onBeforeUnmount(() => window.removeEventListener(TASK_DRAG_END_EVENT, resetDropT
       <div class="flex items-center justify-between">
         <h1 class="text-2xl font-semibold tracking-tight">今天</h1>
         <div class="flex items-center gap-0.5">
-          <button
-            class="wb-icon-button rounded-md p-1.5 transition-colors hover:bg-[var(--hover)]"
-            style="color: var(--text-tertiary)"
-            title="切换到项目工作台"
-            @click="emit('open-projects')"
-          >
-            <FolderKanban :size="16" />
-          </button>
           <button
             class="wb-icon-button rounded-md p-1.5 transition-colors hover:bg-[var(--hover)]"
             style="color: var(--text-tertiary)"

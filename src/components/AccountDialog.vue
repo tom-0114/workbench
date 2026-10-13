@@ -105,7 +105,7 @@ async function submitReset(user: UserAccount) {
 }
 
 async function removeAccount(user: UserAccount) {
-  if (!window.confirm(`删除账号 ${user.username}？该账号的任务和项目会一并删除，且无法恢复。`)) return;
+  if (!window.confirm(`删除账号 ${user.username}？该账号的任务会一并删除，且无法恢复。`)) return;
   rowBusy.value = user.id;
   usersError.value = "";
   try {
@@ -151,17 +151,17 @@ watch(
           修改密码
         </div>
         <label class="block">
-          <span class="wpb-field-label">当前密码</span>
-          <input v-model="pwd.current" type="password" class="wpb-input mt-1" autocomplete="current-password" />
+          <span class="wb-field-label">当前密码</span>
+          <input v-model="pwd.current" type="password" class="wb-input mt-1" autocomplete="current-password" />
         </label>
         <div class="grid grid-cols-2 gap-3">
           <label class="block">
-            <span class="wpb-field-label">新密码</span>
-            <input v-model="pwd.next" type="password" class="wpb-input mt-1" autocomplete="new-password" />
+            <span class="wb-field-label">新密码</span>
+            <input v-model="pwd.next" type="password" class="wb-input mt-1" autocomplete="new-password" />
           </label>
           <label class="block">
-            <span class="wpb-field-label">确认新密码</span>
-            <input v-model="pwd.confirm" type="password" class="wpb-input mt-1" autocomplete="new-password" />
+            <span class="wb-field-label">确认新密码</span>
+            <input v-model="pwd.confirm" type="password" class="wb-input mt-1" autocomplete="new-password" />
           </label>
         </div>
         <div class="flex items-center justify-between gap-3">
@@ -191,14 +191,14 @@ watch(
             创建账号
           </div>
           <p class="text-[12px]" style="color: var(--text-tertiary)">
-            每个账号的任务、日历和项目互相独立。账号仅限小写字母、数字和 _ . -。
+            每个账号的任务互相独立，仅本人可见。账号仅限小写字母、数字和 _ . -。
           </p>
           <form class="flex items-end gap-2" @submit.prevent="createAccount">
             <label class="block min-w-0 flex-1">
-              <span class="wpb-field-label">账号</span>
+              <span class="wb-field-label">账号</span>
               <input
                 v-model="form.username"
-                class="wpb-input mt-1"
+                class="wb-input mt-1"
                 autocomplete="off"
                 autocapitalize="none"
                 spellcheck="false"
@@ -206,8 +206,8 @@ watch(
               />
             </label>
             <label class="block min-w-0 flex-1">
-              <span class="wpb-field-label">初始密码</span>
-              <input v-model="form.password" type="password" class="wpb-input mt-1" autocomplete="new-password" />
+              <span class="wb-field-label">初始密码</span>
+              <input v-model="form.password" type="password" class="wb-input mt-1" autocomplete="new-password" />
             </label>
             <Button type="submit" size="sm" :disabled="createBusy">
               <LoaderCircle v-if="createBusy" class="animate-spin" aria-hidden="true" />
@@ -270,7 +270,7 @@ watch(
                 <input
                   v-model="resetPwd"
                   type="password"
-                  class="wpb-input min-w-0 flex-1"
+                  class="wb-input min-w-0 flex-1"
                   placeholder="新密码"
                   autocomplete="new-password"
                   :aria-label="`${user.username} 的新密码`"

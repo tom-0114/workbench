@@ -1,7 +1,7 @@
 # Workbench 个人工作台
 
-一个安静、克制的个人效率工具：月度日历 + Todo + 项目工作台，macOS 风格视觉。
-Vue 3 + FullCalendar 前端，Node.js + PostgreSQL 后端（`server/index.mjs`），单用户、Cookie 登录。
+一个安静、克制的个人效率工具：月度日历 + Todo，macOS 风格视觉。
+Vue 3 + FullCalendar 前端，Node.js + PostgreSQL 后端（`server/index.mjs`），多用户、Cookie 登录。
 
 ## 功能
 
@@ -12,9 +12,8 @@ Vue 3 + FullCalendar 前端，Node.js + PostgreSQL 后端（`server/index.mjs`�
 - 收集箱：存放无日期的事项，可拖到日历上安排日期
 - 重复任务：每天 / 每周 / 每月（31 号自动落到小月月末）/ 每年 / 农历每年，按天独立打卡
 - 中国节假日：法定假日（休）/ 调休上班（班）/ 周末 背景区分
-- 项目工作台（灵感工坊）：灵感速记、需求整理、任务规划、资料链接、项目动态
 - 备份：设置里一键导出 JSON（含回收站与打卡记录）
-- 多账号：管理员在「设置 → 账号与成员」创建账号、重置密码；各账号的任务、打卡、项目互相隔离
+- 多账号：管理员在「设置 → 账号与成员」创建账号、重置密码；各账号的任务、打卡互相隔离
 - 全局搜索（Ctrl+F）、深色模式、快捷键 N / T / ← →
 
 ## 开发

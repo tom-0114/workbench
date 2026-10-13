@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import { useMediaQuery } from "@vueuse/core";
-import { AlertCircle, CalendarDays, FolderKanban, ListTodo, LoaderCircle, RefreshCw, X } from "lucide-vue-next";
+import { AlertCircle, CalendarDays, ListTodo, LoaderCircle, RefreshCw, X } from "lucide-vue-next";
 import { useTaskStore } from "@/stores/tasks";
-import { useProjectStore } from "@/stores/projects";
 import { getSession, login, logout } from "@/lib/auth";
 import type { Occurrence } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -11,28 +10,20 @@ import LoginPage from "@/components/LoginPage.vue";
 import MonthView from "@/components/MonthView.vue";
 import TodayPanel from "@/components/TodayPanel.vue";
 import TaskDialog from "@/components/TaskSheet.vue";
-import ProjectWorkbench from "@/components/projects/ProjectWorkbench.vue";
 
 const store = useTaskStore();
-const projectStore = useProjectStore();
 
 const taskDialogOpen = ref(false);
 const currentOcc = ref<Occurrence | null>(null);
 const isMobile = useMediaQuery("(max-width: 767px)");
 const mobilePane = ref<"today" | "calendar">("calendar");
-type Workspace = "calendar" | "projects";
-const workspace = ref<Workspace>(
-  localStorage.getItem("wb.workspace") === "projects" ? "projects" : "calendar",
-);
 const appState = ref<"checking" | "guest" | "loading" | "ready" | "error">("checking");
 const loginBusy = ref(false);
 const loginError = ref("");
 let authRevision = 0;
 
-function setWorkspace(next: Workspace, pane?: "today" | "calendar") {
-  workspace.value = next;
-  if (pane) mobilePane.value = pane;
-  localStorage.setItem("wb.workspace", next);
+function setMobilePane(pane: "today" | "calendar") {
+  mobilePane.value = pane;
 }
 
 function openTask(occ: Occurrence) {
@@ -100,11 +91,9 @@ async function handleLogin(credentials: { username: string; password: string }) 
 
 async function handleLogout() {
   try {
-    await projectStore.flushPending();
     await logout();
   } finally {
     store.resetData();
-    projectStore.reset();
     taskDialogOpen.value = false;
     appState.value = "guest";
   }
@@ -113,7 +102,6 @@ async function handleLogout() {
 function onAuthRequired() {
   authRevision += 1;
   store.resetData();
-  projectStore.reset();
   taskDialogOpen.value = false;
   loginError.value = "登录已失效，请重新登录";
   appState.value = "guest";
@@ -160,66 +148,49 @@ onBeforeUnmount(() => window.removeEventListener("wb:auth-required", onAuthRequi
     class="wb-app-shell flex overflow-hidden max-md:flex-col md:flex-row"
     :class="resizing ? 'select-none' : ''"
   >
-    <template v-if="workspace === 'calendar'">
-      <TodayPanel
-        class="wb-today-panel min-h-0 shrink-0"
-        :class="isMobile && mobilePane !== 'today' ? 'hidden' : 'max-md:w-full max-md:flex-1'"
-        :style="
-          isMobile
-            ? { background: 'var(--bg-secondary)' }
-            : { width: sidebarWidth + 'px', background: 'var(--bg-secondary)' }
-        "
-        @open-task="openTask"
-        @logout="handleLogout"
-        @open-projects="setWorkspace('projects')"
-      />
-      <!-- 侧边栏宽度拖拽手柄 -->
-      <div
-        v-if="!isMobile"
-        class="relative z-10 -mx-0.5 w-1 shrink-0 cursor-col-resize transition-colors"
-        :style="{ background: resizing ? 'var(--accent-color)' : 'var(--border-subtle)' }"
-        title="拖动调整侧栏宽度"
-        @pointerdown="startResize"
-      />
-      <MonthView
-        v-show="!isMobile || mobilePane === 'calendar'"
-        class="min-h-0 min-w-0 flex-1 max-md:w-full"
-        @open-task="openTask"
-      />
-    </template>
-    <ProjectWorkbench
-      v-else
-      class="min-h-0 min-w-0 flex-1"
-      @back="setWorkspace('calendar')"
+    <TodayPanel
+      class="wb-today-panel min-h-0 shrink-0"
+      :class="isMobile && mobilePane !== 'today' ? 'hidden' : 'max-md:w-full max-md:flex-1'"
+      :style="
+        isMobile
+          ? { background: 'var(--bg-secondary)' }
+          : { width: sidebarWidth + 'px', background: 'var(--bg-secondary)' }
+      "
+      @open-task="openTask"
+      @logout="handleLogout"
+    />
+    <!-- 侧边栏宽度拖拽手柄 -->
+    <div
+      v-if="!isMobile"
+      class="relative z-10 -mx-0.5 w-1 shrink-0 cursor-col-resize transition-colors"
+      :style="{ background: resizing ? 'var(--accent-color)' : 'var(--border-subtle)' }"
+      title="拖动调整侧栏宽度"
+      @pointerdown="startResize"
+    />
+    <MonthView
+      v-show="!isMobile || mobilePane === 'calendar'"
+      class="min-h-0 min-w-0 flex-1 max-md:w-full"
+      @open-task="openTask"
     />
 
     <nav v-if="isMobile" class="wb-mobile-nav" aria-label="主要页面">
       <button
         type="button"
-        :class="workspace === 'calendar' && mobilePane === 'today' ? 'is-active' : ''"
-        :aria-current="workspace === 'calendar' && mobilePane === 'today' ? 'page' : undefined"
-        @click="setWorkspace('calendar', 'today')"
+        :class="mobilePane === 'today' ? 'is-active' : ''"
+        :aria-current="mobilePane === 'today' ? 'page' : undefined"
+        @click="setMobilePane('today')"
       >
         <ListTodo aria-hidden="true" />
         <span>今天</span>
       </button>
       <button
         type="button"
-        :class="workspace === 'calendar' && mobilePane === 'calendar' ? 'is-active' : ''"
-        :aria-current="workspace === 'calendar' && mobilePane === 'calendar' ? 'page' : undefined"
-        @click="setWorkspace('calendar', 'calendar')"
+        :class="mobilePane === 'calendar' ? 'is-active' : ''"
+        :aria-current="mobilePane === 'calendar' ? 'page' : undefined"
+        @click="setMobilePane('calendar')"
       >
         <CalendarDays aria-hidden="true" />
         <span>日历</span>
-      </button>
-      <button
-        type="button"
-        :class="workspace === 'projects' ? 'is-active' : ''"
-        :aria-current="workspace === 'projects' ? 'page' : undefined"
-        @click="setWorkspace('projects')"
-      >
-        <FolderKanban aria-hidden="true" />
-        <span>项目</span>
       </button>
     </nav>
     <TaskDialog v-model:open="taskDialogOpen" :occurrence="currentOcc" />
