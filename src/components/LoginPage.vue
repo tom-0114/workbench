@@ -58,7 +58,7 @@ function submit() {
         </div>
       </div>
 
-      <p class="wb-login-intro">每个账号的任务、日历和项目各自独立，仅本人可见。</p>
+      <p class="wb-login-intro">每个账号的任务各自独立，仅本人可见。</p>
 
       <form class="wb-login-form" :aria-busy="busy" @submit.prevent="submit">
         <div class="wb-login-field">
