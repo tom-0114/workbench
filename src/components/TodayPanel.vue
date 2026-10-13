@@ -103,14 +103,6 @@ const upcoming = computed(() =>
     ),
 );
 
-function fmtUpcomingMeta(date: string): string {
-  const diff = Math.round((parseDate(date).getTime() - parseDate(todayStr.value).getTime()) / 86_400_000);
-  if (diff === 1) return "明天";
-  if (diff === 2) return "后天";
-  const d = parseDate(date);
-  return `周${"日一二三四五六"[d.getDay()]} ${d.getMonth() + 1}/${d.getDate()}`;
-}
-
 function taskToOcc(t: Task): Occurrence {
   return { task: t, date: t.dueDate, completed: t.completed, isVirtual: false };
 }
@@ -270,11 +262,6 @@ const appearanceOptions: Array<[Appearance, string]> = [
   ["dark", "深色"],
 ];
 
-function fmtDueLabel(t: Task): string {
-  if (!t.dueDate) return "收集箱";
-  return t.dueDate.replace(/-/g, "/");
-}
-
 /* 备份：导出全部任务与打卡记录为 JSON */
 const accountOpen = ref(false);
 
@@ -414,7 +401,6 @@ onBeforeUnmount(() => window.removeEventListener(TASK_DRAG_END_EVENT, resetDropT
               :key="t.id"
               :occurrence="taskToOcc(t)"
               :inline-edit="!isMobile"
-              :meta="fmtDueLabel(t)"
               @open-task="emit('open-task', $event)"
             />
           </ul>
@@ -479,7 +465,6 @@ onBeforeUnmount(() => window.removeEventListener(TASK_DRAG_END_EVENT, resetDropT
               :key="t.id"
               :occurrence="taskToOcc(t)"
               :inline-edit="!isMobile"
-              :meta="t.dueDate.slice(5).replace('-', '/')"
               :draggable="!isMobile"
               can-move-today
               can-postpone
@@ -506,7 +491,6 @@ onBeforeUnmount(() => window.removeEventListener(TASK_DRAG_END_EVENT, resetDropT
               :key="occ.task.id + occ.date"
               :occurrence="occ"
               :inline-edit="!isMobile"
-              :meta="fmtUpcomingMeta(occ.date)"
               :draggable="!isMobile"
               can-move-today
               @open-task="emit('open-task', $event)"

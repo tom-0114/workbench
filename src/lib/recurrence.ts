@@ -56,7 +56,8 @@ function yearlyLunarDates(anchor: Date, startYear: number, endYear: number): str
 /**
  * 把任务展开为 [start, end]（含端点）范围内的可渲染实例。
  * - 非重复任务：dueDate 落在范围内则输出一条
- * - 重复任务：从 dueDate（锚点）起，按规则在范围内展开
+ * - 重复任务：从 dueDate（锚点）起，按规则在范围内展开；
+ *   dateOverrides 记录的单次改期例外会把原日期的实例移到新日期（空串 = 该次不出现）
  */
 export function expandOccurrences(
   tasks: Task[],
@@ -81,21 +82,37 @@ export function expandOccurrences(
     const from = t.dueDate > start ? t.dueDate : start;
     if (from > end) continue;
 
+    const overrides = t.dateOverrides ?? {};
+    // 改期例外：原日期 -> 新日期（空串 = 该次移除）；targets 反查“新日期 -> 原日期”
+    const hasOverrides = Object.keys(overrides).length > 0;
+    const targets = new Map<string, string>();
+    if (hasOverrides) {
+      for (const [origin, target] of Object.entries(overrides)) {
+        if (target) targets.set(target, origin);
+      }
+    }
+
     // 每年（公历/农历）：直接计算目标日期，不逐日扫描
     if (t.repeatRule === "yearly" || t.repeatRule === "yearly-lunar") {
-      const dates =
+      const dates = new Set(
         t.repeatRule === "yearly"
           ? yearlySolarDates(anchor, startDate.getFullYear(), endDate.getFullYear())
-          : yearlyLunarDates(anchor, startDate.getFullYear(), endDate.getFullYear());
-      for (const ds of dates) {
-        if (ds >= from && ds <= end) {
-          out.push({
-            task: t,
-            date: ds,
-            completed: completions.has(completionKey(t.id, ds)),
-            isVirtual: true,
-          });
+          : yearlyLunarDates(anchor, startDate.getFullYear(), endDate.getFullYear()),
+      );
+      if (hasOverrides) {
+        for (const target of targets.keys()) {
+          if (target >= from && target <= end) dates.add(target);
         }
+      }
+      for (const ds of dates) {
+        if (ds < from || ds > end) continue;
+        if (hasOverrides && overrides[ds] !== undefined) continue; // 原日期已改期，在新日期出现
+        out.push({
+          task: t,
+          date: ds,
+          completed: completions.has(completionKey(t.id, ds)),
+          isVirtual: true,
+        });
       }
       continue;
     }
@@ -103,6 +120,25 @@ export function expandOccurrences(
     // 每天/每周/每月：逐日匹配
     const cur = parseDate(from);
     while (cur <= endDate) {
+      if (hasOverrides) {
+        const ds = fmtDate(cur);
+        if (overrides[ds] !== undefined) {
+          // 改期的原日期：实例移到新日期，这里不再出现
+          cur.setDate(cur.getDate() + 1);
+          continue;
+        }
+        if (targets.has(ds)) {
+          // 被改期实例的新落点（不一定仍符合重复规则）
+          out.push({
+            task: t,
+            date: ds,
+            completed: completions.has(completionKey(t.id, ds)),
+            isVirtual: true,
+          });
+          cur.setDate(cur.getDate() + 1);
+          continue;
+        }
+      }
       let match = false;
       switch (t.repeatRule) {
         case "daily":

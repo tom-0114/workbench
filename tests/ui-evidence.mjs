@@ -16,7 +16,7 @@ try {
   await reset();
   const context=await browser.newContext({viewport:{width:1440,height:900},recordVideo:{dir:`${out}/videos`,size:{width:1440,height:900}}});
   const p=await context.newPage();await p.goto(base);await shot(p,'desktop-list');
-  await p.locator('[data-task-id="1"] .wb-sidebar-title').click();await p.locator('#wb-title').waitFor();await shot(p,'desktop-detail');
+  await p.locator('[data-task-id="1"]').getByRole('button',{name:'更多操作：整理本周的项目进度'}).click();await p.getByRole('button',{name:'详细信息'}).click();await p.locator('#wb-title').waitFor();await shot(p,'desktop-detail');
   await p.getByRole('button',{name:'取消',exact:true}).click();
   await p.locator('[data-task-id="1"] .wb-check').click();await p.locator('[data-task-id="1"] .wb-check[aria-checked="true"]').waitFor();await shot(p,'desktop-completed');
   await p.locator('.wb-nav-item').filter({has:p.getByText('最近 7 天',{exact:true})}).click();await shot(p,'desktop-upcoming');
@@ -24,7 +24,7 @@ try {
   await reset();
   const mc=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true});const m=await mc.newPage();await m.goto(base);await shot(m,'mobile-list');
   await m.getByRole('button',{name:'打开清单导航'}).click();await m.locator('.wb-navigation').evaluate(el=>Promise.all(el.getAnimations().map(a=>a.finished.catch(()=>{}))));await shot(m,'mobile-navigation');
-  await m.locator('.wb-navigation .wb-nav-item').filter({has:m.getByText('今天',{exact:true})}).click();await m.locator('[data-task-id="1"] .wb-sidebar-title').click();await m.locator('[data-slot="sheet-content"]').waitFor();await shot(m,'mobile-detail');await mc.close();
+  await m.locator('.wb-navigation .wb-nav-item').filter({has:m.getByText('今天',{exact:true})}).click();await m.locator('[data-task-id="1"]').getByRole('button',{name:'更多操作：整理本周的项目进度'}).click();await m.getByRole('button',{name:'详细信息'}).click();await m.locator('[data-slot="sheet-content"]').waitFor();await shot(m,'mobile-detail');await mc.close();
   for (const width of [320,720,768,1024,1100,1280,1920]) {
     const c=await browser.newContext({viewport:{width,height:900},deviceScaleFactor:width===720?2:1});const pg=await c.newPage();await pg.goto(base);await shot(pg,`viewport-${width}`);await c.close();
   }

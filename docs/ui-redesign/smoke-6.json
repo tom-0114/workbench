@@ -1,0 +1,82 @@
+{
+  "time": "2026-10-13T14:03:28.504Z",
+  "boundary": "Isolated local in-memory API; no production authentication or PostgreSQL verification",
+  "results": [
+    {
+      "name": "default list and desktop layout",
+      "result": "PASS"
+    },
+    {
+      "name": "add, edit, save and reload",
+      "result": "PASS"
+    },
+    {
+      "name": "unsaved detail cannot be replaced by another task",
+      "result": "PASS"
+    },
+    {
+      "name": "save failure retains draft and retry persists",
+      "result": "PASS"
+    },
+    {
+      "name": "add failure retains input and avoids duplicate",
+      "result": "PASS"
+    },
+    {
+      "name": "completion persists after reload and appears in history",
+      "result": "PASS"
+    },
+    {
+      "name": "recurrence completion applies to one day only",
+      "result": "PASS"
+    },
+    {
+      "name": "row click edits title inline",
+      "result": "PASS"
+    },
+    {
+      "name": "quick date reschedules and can clear to inbox",
+      "result": "PASS"
+    },
+    {
+      "name": "quick priority sets high and tints the row",
+      "result": "PASS"
+    },
+    {
+      "name": "recurring quick date offers once vs series scope",
+      "result": "PASS"
+    },
+    {
+      "name": "search and tag navigation",
+      "result": "PASS"
+    },
+    {
+      "name": "reschedule through task menu",
+      "result": "PASS"
+    },
+    {
+      "name": "soft delete, recycle and restore",
+      "result": "PASS"
+    },
+    {
+      "name": "calendar remains reachable",
+      "result": "PASS"
+    },
+    {
+      "name": "tabs switch fast with large data",
+      "result": "PASS"
+    },
+    {
+      "name": "mobile navigation, inbox add and bottom sheet",
+      "result": "PASS"
+    },
+    {
+      "name": "mobile task menu remains accessible",
+      "result": "PASS"
+    },
+    {
+      "name": "mobile quick date and priority",
+      "result": "PASS"
+    }
+  ]
+}

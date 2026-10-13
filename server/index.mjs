@@ -68,6 +68,7 @@ CREATE TABLE IF NOT EXISTS task_completions (
 );
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS deleted_at TEXT;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS user_id BIGINT;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS date_overrides JSONB NOT NULL DEFAULT '{}';
 `;
 
 // 单用户时代的旧数据（user_id 为空）回填后再加约束
@@ -206,6 +207,7 @@ function rowToTask(r) {
     tags: r.tags ?? [],
     repeatRule: r.repeat_rule,
     completed: !!r.completed,
+    dateOverrides: r.date_overrides ?? {},
     deletedAt: r.deleted_at ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -242,7 +244,7 @@ async function createTask(userId, input) {
 async function updateTask(userId, task) {
   const { rowCount } = await pool.query(
     `UPDATE tasks SET title=$1, notes=$2, due_date=$3, priority=$4, tags=$5::jsonb,
-       repeat_rule=$6, completed=$7, updated_at=$8 WHERE id=$9 AND user_id=$10`,
+       repeat_rule=$6, completed=$7, date_overrides=$8::jsonb, updated_at=$9 WHERE id=$10 AND user_id=$11`,
     [
       task.title,
       task.notes ?? "",
@@ -251,6 +253,7 @@ async function updateTask(userId, task) {
       JSON.stringify(task.tags ?? []),
       task.repeatRule ?? "none",
       !!task.completed,
+      JSON.stringify(task.dateOverrides ?? {}),
       new Date().toISOString(),
       task.id,
       userId,

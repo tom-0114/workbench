@@ -1,17 +1,16 @@
 <script setup lang="ts">
-import { nextTick, ref, watch } from "vue";
-import { CalendarArrowDown, CalendarClock, Check, Flag, Inbox, LoaderCircle, MoreHorizontal, Pencil, Repeat2, Trash2, X } from "lucide-vue-next";
+import { computed, nextTick, ref, watch } from "vue";
+import { CalendarArrowDown, CalendarClock, CalendarDays, Check, Flag, Inbox, Info, LoaderCircle, MoreHorizontal, Repeat2, Trash2, X } from "lucide-vue-next";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useTaskStore } from "@/stores/tasks";
-import type { Occurrence } from "@/lib/types";
-import { addDays } from "@/lib/date";
+import { PRIORITY_LABELS, type Occurrence, type Priority } from "@/lib/types";
+import { addDays, parseDate } from "@/lib/date";
 import { endTaskDrag, startTaskDrag } from "@/lib/task-drag";
 
 const props = withDefaults(
   defineProps<{
     occurrence: Occurrence;
     inlineEdit?: boolean;
-    meta?: string;
     canMoveToday?: boolean;
     canMoveInbox?: boolean;
     canPostpone?: boolean;
@@ -20,7 +19,6 @@ const props = withDefaults(
   }>(),
   {
     inlineEdit: true,
-    meta: "",
     canMoveToday: false,
     canMoveInbox: false,
     canPostpone: false,
@@ -37,6 +35,12 @@ const draftTitle = ref(props.occurrence.task.title);
 const busy = ref(false);
 const inputEl = ref<HTMLInputElement>();
 const actionsOpen = ref(false);
+const dateOpen = ref(false);
+const dateBusy = ref(false);
+// 默认“仅这一次”：快捷改期最常见的意图是挪某一天，整体改期是更重的决定，让用户显式选择
+const scope = ref<"once" | "series">("once");
+const dateDraft = ref(props.occurrence.date);
+const priorityOpen = ref(false);
 
 watch(
   () => props.occurrence.task.title,
@@ -44,6 +48,55 @@ watch(
     if (mode.value === "idle") draftTitle.value = title;
   },
 );
+
+/** 行内日期标签：今天/明天/昨天/M月D日（跨年带年份），无日期为“未安排” */
+const dateLabel = computed(() => {
+  const date = props.occurrence.date;
+  if (!date) return "未安排";
+  if (date === store.currentDate) return "今天";
+  if (date === addDays(store.currentDate, 1)) return "明天";
+  if (date === addDays(store.currentDate, -1)) return "昨天";
+  const d = parseDate(date);
+  const base = `${d.getMonth() + 1}月${d.getDate()}日`;
+  return d.getFullYear() === parseDate(store.currentDate).getFullYear() ? base : `${d.getFullYear()}年${base}`;
+});
+const isOverdue = computed(
+  () => !!props.occurrence.date && props.occurrence.date < store.currentDate && !props.occurrence.completed,
+);
+
+watch(dateOpen, (open) => {
+  if (!open) return;
+  dateDraft.value = props.occurrence.date;
+  scope.value = "once";
+});
+
+async function applyDate(newDate: string) {
+  // 重复任务的“仅这一次”必须落到一个明确日期；清空只对普通任务开放
+  if (dateBusy.value || (props.occurrence.isVirtual && !newDate)) return;
+  dateBusy.value = true;
+  try {
+    await store.rescheduleOccurrence(props.occurrence, newDate, scope.value);
+    dateOpen.value = false;
+  } catch {
+    // Store 负责错误提示，弹窗保持打开便于重试。
+  } finally {
+    dateBusy.value = false;
+  }
+}
+
+async function applyPriority(priority: Priority) {
+  if (busy.value) return;
+  priorityOpen.value = false;
+  if (priority === props.occurrence.task.priority) return;
+  busy.value = true;
+  try {
+    await store.setPriority(props.occurrence, priority);
+  } catch {
+    // Store 负责错误提示。
+  } finally {
+    busy.value = false;
+  }
+}
 
 async function beginEdit() {
   if (!props.inlineEdit) {
@@ -161,6 +214,7 @@ async function confirmDelete() {
       draggable ? 'is-draggable' : '',
       mode !== 'idle' ? 'is-active' : '',
       selected ? 'is-selected' : '',
+      occurrence.task.priority === 3 && !occurrence.completed ? 'is-pri-high' : '',
     ]"
     :data-task-id="occurrence.task.id"
     :draggable="draggable && mode === 'idle' && !occurrence.isVirtual"
@@ -173,7 +227,6 @@ async function confirmDelete() {
       role="checkbox"
       :aria-checked="occurrence.completed"
       :disabled="busy"
-      :data-priority="occurrence.task.priority"
       :class="occurrence.completed ? 'done' : ''"
       :aria-label="occurrence.completed ? `取消完成：${occurrence.task.title}` : `完成：${occurrence.task.title}`"
       :title="occurrence.completed ? '取消完成' : '完成'"
@@ -219,25 +272,106 @@ async function confirmDelete() {
     </div>
 
     <template v-else>
-      <button type="button" class="wb-sidebar-title" @click="beginEdit">
+      <button type="button" class="wb-sidebar-title" :title="occurrence.task.title" @click="beginEdit">
         <span class="wb-row-copy"><span class="wb-task-name" :class="occurrence.completed ? 'line-through' : ''">{{ occurrence.task.title }}</span><span v-if="occurrence.task.tags.length" class="wb-row-tags"><span v-for="tag in occurrence.task.tags" :key="tag">#{{ tag }}</span></span></span>
         <Repeat2 v-if="occurrence.isVirtual" class="wb-repeat-mark" aria-label="重复任务" />
       </button>
-      <Flag v-if="occurrence.task.priority > 0" class="wb-task-priority" :class="`wb-pri-${occurrence.task.priority}`" :aria-label="`${['无','低','中','高'][occurrence.task.priority]}优先级`" />
-      <span v-if="meta" class="wb-row-meta">{{ meta }}</span>
+
+      <Popover v-model:open="priorityOpen">
+        <PopoverTrigger as-child>
+          <button
+            type="button"
+            class="wb-task-priority wb-pri-btn"
+            :class="`wb-pri-${occurrence.task.priority}`"
+            :aria-label="`优先级：${PRIORITY_LABELS[occurrence.task.priority]}，点击修改`"
+            title="设置优先级"
+          >
+            <Flag aria-hidden="true" />
+          </button>
+        </PopoverTrigger>
+        <PopoverContent class="wb-task-actions-menu wb-pri-menu" side="bottom" align="start" :align-offset="-8">
+          <button
+            v-for="p in [0, 1, 2, 3] as Priority[]"
+            :key="p"
+            type="button"
+            :class="{ 'is-current': occurrence.task.priority === p }"
+            :aria-label="`设为${PRIORITY_LABELS[p]}优先级`"
+            @click="applyPriority(p)"
+          >
+            <Flag aria-hidden="true" :class="p > 0 ? `wb-pri-${p}` : ''" />
+            {{ PRIORITY_LABELS[p] }}
+            <Check v-if="occurrence.task.priority === p" class="wb-menu-check" aria-hidden="true" />
+          </button>
+        </PopoverContent>
+      </Popover>
+
+      <Popover v-model:open="dateOpen">
+        <PopoverTrigger as-child>
+          <button
+            type="button"
+            class="wb-row-date"
+            :class="{ 'is-overdue': isOverdue, 'is-empty': !occurrence.date }"
+            :disabled="occurrence.completed"
+            :aria-label="`日期：${dateLabel}，点击修改`"
+            title="修改日期"
+          >
+            <CalendarDays aria-hidden="true" />
+            <span>{{ dateLabel }}</span>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent class="wb-date-pop" side="bottom" align="end" :align-offset="-4">
+          <label class="wb-date-pop-field">
+            <span>日期</span>
+            <input
+              type="date"
+              :value="dateDraft"
+              :disabled="dateBusy"
+              :aria-label="`选择日期：${occurrence.task.title}`"
+              @change="applyDate(($event.target as HTMLInputElement).value)"
+            />
+          </label>
+          <div
+            v-if="occurrence.isVirtual"
+            class="wb-date-scope"
+            role="radiogroup"
+            :aria-label="`改期范围：${occurrence.task.title}`"
+          >
+            <button type="button" role="radio" :aria-checked="scope === 'once'" :class="{ 'is-current': scope === 'once' }" @click="scope = 'once'">仅这一次</button>
+            <button type="button" role="radio" :aria-checked="scope === 'series'" :class="{ 'is-current': scope === 'series' }" @click="scope = 'series'">整个系列</button>
+          </div>
+          <p v-if="occurrence.isVirtual" class="wb-date-hint">
+            {{ scope === "once" ? "只把这一次移到所选日期，之后的重复照旧" : "整个系列将改为从所选日期开始重复" }}
+          </p>
+          <div class="wb-date-quick">
+            <button type="button" :disabled="dateBusy" @click="applyDate(store.currentDate)">今天</button>
+            <button type="button" :disabled="dateBusy" @click="applyDate(addDays(store.currentDate, 1))">明天</button>
+            <button type="button" :disabled="dateBusy" @click="applyDate(addDays(store.currentDate, 2))">后天</button>
+            <button type="button" :disabled="dateBusy" @click="applyDate(addDays(store.currentDate, 7))">一周后</button>
+          </div>
+          <button
+            v-if="!occurrence.isVirtual && occurrence.date"
+            type="button"
+            class="wb-date-clear"
+            :disabled="dateBusy"
+            title="清除后移入收集箱"
+            @click="applyDate('')"
+          >
+            清除日期
+          </button>
+        </PopoverContent>
+      </Popover>
 
       <Popover v-model:open="actionsOpen">
         <PopoverTrigger as-child><button class="wb-control wb-task-more" :aria-label="`更多操作：${occurrence.task.title}`"><MoreHorizontal /></button></PopoverTrigger>
         <PopoverContent class="wb-task-actions-menu" side="bottom" align="end" @click="actionsOpen=false">
         <button
-          v-if="inlineEdit"
           type="button"
-          aria-label="编辑事项"
-          title="行内编辑"
-          @click="beginEdit"
+          aria-label="详细信息"
+          title="打开任务详情"
+          @click="emit('open-task', props.occurrence)"
         >
-          <Pencil aria-hidden="true" />
-          编辑标题
+          <Info aria-hidden="true" />
+          详细信息
         </button>
         <!-- 改期类操作会移动整个系列，重复任务实例不显示 -->
         <button

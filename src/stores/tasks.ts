@@ -158,6 +158,32 @@ export const useTaskStore = defineStore("tasks", {
       await this.updateTask({ ...task, dueDate: newDate });
     },
 
+    /**
+     * 行内快捷改期：重复任务可选作用范围。
+     * - once（仅这一次）：写 dateOverrides 例外，把该次实例移到新日期；空串表示该次移除
+     * - series（整个系列）：改锚点 dueDate 并清空旧例外——整体改期即重定义排期，
+     *   保留旧例外会以“幽灵实例”的形式出现在新排期里
+     */
+    async rescheduleOccurrence(occ: Occurrence, newDate: string, scope: "once" | "series" = "series") {
+      const task = occ.task;
+      if (occ.isVirtual && task.repeatRule !== "none" && scope === "once") {
+        const overrides = { ...(task.dateOverrides ?? {}) };
+        if (newDate === occ.date) delete overrides[occ.date];
+        else overrides[occ.date] = newDate;
+        await this.updateTask({ ...task, dateOverrides: overrides });
+        return;
+      }
+      if (newDate === task.dueDate) return;
+      await this.updateTask({ ...task, dueDate: newDate, dateOverrides: {} });
+    },
+
+    /** 行内快捷调整优先级（0-3） */
+    async setPriority(occ: Occurrence, priority: Occurrence["task"]["priority"]) {
+      const task = occ.task;
+      if (task.priority === priority) return;
+      await this.updateTask({ ...task, priority });
+    },
+
     /** 切换完成状态：非重复任务改 completed；重复任务写当日打卡 */
     async toggleOccurrence(occ: Occurrence) {
       this.operationError = "";

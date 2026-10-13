@@ -14,7 +14,8 @@ function reset() {
     ['准备下周分享的提纲',2,2,['工作'],''],
     ['每周复盘',3,1,['成长'],''],
     ['回复合作方的邮件',0,0,['工作'],''],
-  ].map(([title,offset,priority,tags,notes],i)=>({id:i+1,title,notes,priority,tags,dueDate:offset===null?'':localDate(offset),repeatRule:i===3?'daily':'none',completed:i===9,deletedAt:null,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()}));
+    ['写周报',0,2,['工作'],''],
+  ].map(([title,offset,priority,tags,notes],i)=>({id:i+1,title,notes,priority,tags,dueDate:offset===null?'':localDate(offset),repeatRule:i===3?'daily':i===10?'weekly':'none',completed:i===9,deletedAt:null,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()}));
   completions=[];
   failNext=false;
 }
@@ -26,6 +27,13 @@ http.createServer(async(req,res)=>{
   const json=(status,data)=>{res.writeHead(status,{'content-type':'application/json'});res.end(JSON.stringify(data));};
   if(path==='/__test/reset'){reset();return json(200,{ok:true});}
   if(path==='/__test/fail'){failNext=true;return json(200,{ok:true});}
+  // 性能验证：300 条普通任务 + 每日重复任务 800 天打卡
+  if(path==='/__test/big'){
+    for(let i=0;i<300;i++){const offset=(i%60)-30;tasks.push({id:100+i,title:`压测任务 ${i+1}`,notes:'',priority:i%4,tags:['压测'],dueDate:localDate(offset),repeatRule:'none',completed:i%5===0,deletedAt:null,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});}
+    tasks.push({id:900,title:'压测每日打卡',notes:'',priority:1,tags:['压测'],dueDate:localDate(-800),repeatRule:'daily',completed:false,deletedAt:null,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
+    for(let i=1;i<=800;i++)completions.push(`900:${localDate(-i)}`);
+    return json(200,{ok:true,tasks:tasks.length,completions:completions.length});
+  }
   if(path==='/api/auth/session')return json(200,{authenticated:true,username:'chentong',isAdmin:false});
   if(path==='/api/tasks'&&req.method==='GET')return json(200,tasks);
   if(path==='/api/completions'&&req.method==='GET')return json(200,completions);

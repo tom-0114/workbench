@@ -11,6 +11,8 @@ export interface Task {
   tags: string[];
   repeatRule: RepeatRule;
   completed: boolean; // 仅非重复任务使用
+  /** 重复任务的单次改期例外：锚点展开日期 -> 新日期；空串表示该次不出现 */
+  dateOverrides?: Record<string, string>;
   deletedAt: string | null; // 软删除时间；非空时只在回收站显示
   createdAt: string;
   updatedAt: string;
