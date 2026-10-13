@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 const require = process.env.WORKBENCH_PLAYWRIGHT_DIR ? createRequire(resolve(process.env.WORKBENCH_PLAYWRIGHT_DIR,'package.json')) : createRequire(import.meta.url);
 const { chromium } = require('playwright');
 const base = process.env.WORKBENCH_UI_URL || 'http://127.0.0.1:5176';
@@ -24,10 +24,11 @@ async function save(page) { await page.getByRole('button',{name:'保存',exact:t
 async function closed(page) { const cancel=page.getByRole('button',{name:'取消',exact:true});if(await cancel.isVisible())await cancel.click();await page.locator('#wb-title').waitFor({state:'hidden'}); }
 async function taskById(id) { return (await (await fetch(`http://127.0.0.1:3002/api/tasks`)).json()).find(t=>t.id===id); }
 async function waitForTask(id,predicate) { for (let i=0;i<25;i++){const t=await taskById(id);if(t&&predicate(t))return t;await new Promise(r=>setTimeout(r,200));}throw new Error(`task ${id} 未在期限内满足断言`); }
+async function waitForTaskWhere(predicate) { for (let i=0;i<25;i++){const tasks=await (await fetch(`http://127.0.0.1:3002/api/tasks`)).json();const t=tasks.find(predicate);if(t)return t;await new Promise(r=>setTimeout(r,200));}throw new Error('没有任务在期限内满足断言'); }
 async function check(name,fn) { await fn();results.push({name,result:'PASS'});console.log(`PASS ${name}`); }
 try {
   await reset();
-  const context=await browser.newContext({viewport:{width:1440,height:900}});
+  const context=await browser.newContext({viewport:{width:1440,height:900},acceptDownloads:true});
   const page=await context.newPage();
   activePage=page;page.setDefaultTimeout(10000);
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -48,16 +49,42 @@ try {
   await check('add failure retains input and avoids duplicate',async()=>{
     const input=page.getByRole('textbox',{name:'添加任务',exact:true});await input.fill('保留新增输入');await fail();await input.press('Enter');await waitText(page,'新建失败，请检查网络后重试');assert.equal(await input.inputValue(),'保留新增输入');await input.press('Enter');await page.locator('#wb-title').waitFor();await closed(page);assert.equal(await page.getByText('保留新增输入',{exact:true}).count(),1);
   });
+  await check('natural language quick add parses date',async()=>{
+    const input=page.getByRole('textbox',{name:'添加任务',exact:true});await input.fill('明天交周报');
+    await page.locator('.wb-parse-hint').filter({hasText:'明天'}).waitFor();
+    await input.press('Enter');await page.locator('#wb-title').waitFor();await closed(page);
+    await waitForTaskWhere(t=>t.title==='交周报'&&t.dueDate===localDate(1));
+  });
   await check('completion persists after reload and appears in history',async()=>{
     const r=await row(page,'保留新增输入');await r.getByRole('checkbox').click();await r.getByRole('checkbox',{checked:true}).waitFor();await page.reload();const done=await row(page,'保留新增输入');assert.equal(await done.getByRole('checkbox').getAttribute('aria-checked'),'true');await nav(page,'已完成');await row(page,'保留新增输入');
   });
   await check('recurrence completion applies to one day only',async()=>{
     await nav(page,'今天');const r=await row(page,'下班后跑步 30 分钟');await r.getByRole('checkbox').click();await r.getByRole('checkbox',{checked:true}).waitFor();await nav(page,'最近 7 天');const rows=page.locator('.wb-task-list .wb-sidebar-row').filter({has:page.getByText('下班后跑步 30 分钟',{exact:true})});await rows.first().waitFor();assert.equal(await rows.count(),7);assert.equal(await rows.nth(1).getByRole('checkbox').getAttribute('aria-checked'),'false');
   });
-  await check('row click edits title inline',async()=>{
+  await check('sort control reorders and groups collapse',async()=>{
+    await nav(page,'今天');
+    const firstRow=()=>page.locator('.wb-task-group:not(.is-overdue) .wb-sidebar-row').first();
+    const priTop=await firstRow().textContent();
+    assert.ok(priTop?.includes('整理本周的项目进度'),'默认按优先级应高优在前');
+    await page.getByLabel('任务排序').selectOption('title');
+    assert.notEqual(await firstRow().textContent(),priTop,'按标题后顺序应变化');
+    await page.getByLabel('任务排序').selectOption('priority');
+    assert.ok((await firstRow().textContent())?.includes('整理本周的项目进度'),'切回优先级应恢复');
+    // 分组折叠
+    const heading=page.locator('.wb-task-group.is-overdue .wb-group-heading');
+    await heading.click();
+    assert.equal(await page.locator('.wb-task-group.is-overdue .wb-task-list').isHidden(),true,'折叠后列表应隐藏');
+    await heading.click();
+    assert.equal(await page.locator('.wb-task-group.is-overdue .wb-task-list').isVisible(),true,'展开后列表应可见');
+  });
+  await check('row click edits title inline and ignores IME enter',async()=>{
     await nav(page,'今天');const r=await row(page,'给家里买牛奶和水果');await r.locator('.wb-sidebar-title').click();
     // 进入编辑后标题文本被输入框取代，编辑框用 aria-label 全局定位
-    const editor=page.getByRole('textbox',{name:'编辑：给家里买牛奶和水果'});await editor.waitFor();await editor.fill('给家里买牛奶和鸡蛋');await editor.press('Enter');
+    const editor=page.getByRole('textbox',{name:'编辑：给家里买牛奶和水果'});await editor.waitFor();await editor.fill('给家里买牛奶和鸡蛋');
+    // 输入法选词中的 Enter 不应保存
+    await editor.evaluate(el=>el.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',isComposing:true,bubbles:true})));
+    await page.waitForTimeout(200);assert.equal((await taskById(5)).title,'给家里买牛奶和水果','合成中的 Enter 不应保存');
+    await editor.press('Enter');
     await row(page,'给家里买牛奶和鸡蛋');assert.equal((await taskById(5)).title,'给家里买牛奶和鸡蛋');await page.reload();await row(page,'给家里买牛奶和鸡蛋');
   });
   await check('quick date reschedules and can clear to inbox',async()=>{
@@ -94,14 +121,113 @@ try {
     await pop2.locator('input[type="date"]').fill(localDate(2));
     const afterSeries=await waitForTask(11,t=>t.dueDate===localDate(2));assert.deepEqual(afterSeries.dateOverrides,{});
   });
-  await check('search and tag navigation',async()=>{
+  await check('moved occurrence reflects on calendar',async()=>{
+    // 仅这一次改期后，月视图中原日期不再显示、新日期出现（覆盖 expandOccurrences 的例外分支）
+    const rows=page.locator('.wb-task-list .wb-sidebar-row').filter({has:page.getByText('写周报',{exact:true})});
+    await rows.first().getByRole('button',{name:/日期：/}).click();
+    const pop=page.locator('.wb-date-pop').last();
+    assert.equal(await pop.getByRole('radio',{name:'仅这一次'}).getAttribute('aria-checked'),'true');
+    await pop.locator('input[type="date"]').fill(localDate(5));
+    await waitForTask(11,t=>t.dateOverrides&&t.dateOverrides[localDate(2)]===localDate(5));
+    await nav(page,'日历');
+    await page.locator('.fc-daygrid-day').first().waitFor();
+    assert.equal(await page.locator(`.fc-daygrid-day[data-date="${localDate(2)}"] .wb-event`).filter({has:page.getByText('写周报')}).count(),0,'原日期不应再显示');
+    assert.equal(await page.locator(`.fc-daygrid-day[data-date="${localDate(5)}"] .wb-event`).filter({has:page.getByText('写周报')}).count(),1,'新日期应出现');
+  });
+  await check('calendar quick add, event click, complete and navigation',async()=>{
+    // 点日期数字唤起快速添加（避开当天的重复任务事件）
+    await page.locator(`.fc-daygrid-day[data-date="${localDate(1)}"] .fc-daygrid-day-number`).click();
+    await page.locator('.wb-quick-add').waitFor();
+    await page.locator('.wb-quick-add input').fill('临时讨论');
+    await page.locator('.wb-quick-add').getByRole('button',{name:'保存'}).click();
+    await page.locator(`.fc-daygrid-day[data-date="${localDate(1)}"] .wb-event`).filter({has:page.getByText('临时讨论')}).waitFor();
+    // 点事项标题打开详情
+    await page.locator('.wb-event').filter({has:page.getByText('临时讨论')}).locator('.wb-title').click();
+    await page.locator('#wb-title').waitFor();
+    assert.equal(await page.locator('#wb-title').inputValue(),'临时讨论');
+    await closed(page);
+    // 日历上的完成打卡
+    const eventCheck=page.locator('.wb-event').filter({has:page.getByText('临时讨论')}).getByRole('button',{name:'完成：临时讨论'});
+    await eventCheck.click();
+    await page.locator('.wb-event').filter({has:page.getByText('临时讨论')}).getByRole('button',{name:'取消完成：临时讨论'}).waitFor();
+    // ←/→ 切换月份
+    const titleBefore=await page.locator('.fc-toolbar-title').textContent();
+    await page.keyboard.press('ArrowLeft');
+    await page.waitForFunction(t=>{const el=document.querySelector('.fc-toolbar-title');return el&&el.textContent!==t;},titleBefore);
+    await page.keyboard.press('ArrowRight');
+    await page.waitForFunction(t=>{const el=document.querySelector('.fc-toolbar-title');return el&&el.textContent===t;},titleBefore);
+    // 每天重复任务在月视图铺开多天
+    assert.ok(await page.locator('.wb-event').filter({has:page.getByText('下班后跑步 30 分钟')}).count()>=5,'重复任务应在月视图多天出现');
+    await nav(page,'今天');
+  });
+  await check('search covers title, notes and tags',async()=>{
     await page.getByRole('button',{name:'搜索任务'}).click();await page.getByRole('textbox',{name:'搜索任务'}).fill('设计师');await row(page,'和设计师确认首页修改');assert.equal(await page.locator('.wb-task-list .wb-sidebar-row').count(),1);await nav(page,'工作');await row(page,'和设计师确认首页修改');
+    await page.getByRole('button',{name:'搜索任务'}).click();
+    const q=page.getByRole('textbox',{name:'搜索任务'});
+    await q.fill('移动端');await row(page,'和设计师确认首页修改');
+    await q.fill('成长');await row(page,'每周复盘');
+    await q.fill('不存在的关键词xyz');await waitText(page,'没有找到相关任务');
+    await page.locator('.wb-search-field').getByRole('button',{name:'清空搜索'}).click();await waitText(page,'搜索标题、标签或备注');
+    await nav(page,'今天');
   });
   await check('reschedule through task menu',async()=>{
     await nav(page,'今天');const r=await row(page,'失败后重试成功的任务');await r.getByRole('button',{name:'更多操作：失败后重试成功的任务'}).click();await page.getByRole('button',{name:'推迟到明天',exact:true}).click();await r.waitFor({state:'hidden'});await nav(page,'最近 7 天');await row(page,'失败后重试成功的任务');
   });
   await check('soft delete, recycle and restore',async()=>{
     await nav(page,'今天');const r=await row(page,'和设计师确认首页修改');await r.getByRole('button',{name:'更多操作：和设计师确认首页修改'}).click();await page.getByRole('button',{name:'删除事项',exact:true}).click();await page.getByRole('group',{name:'确认删除',exact:true}).getByRole('button',{name:'确认',exact:true}).click();await r.waitFor({state:'hidden'});await nav(page,'回收站');const recycled=await row(page,'和设计师确认首页修改');await recycled.getByRole('button',{name:'恢复事项'}).click();await recycled.waitFor({state:'hidden'});await page.reload();await row(page,'和设计师确认首页修改');
+  });
+  await check('detail edits repeat rule for the series',async()=>{
+    await nav(page,'最近 7 天');await openDetail(page,'写周报');
+    await page.locator('[data-slot="select-trigger"]').nth(1).click();
+    await page.getByRole('option',{name:'每月',exact:true}).click();
+    await save(page);
+    await waitForTask(11,t=>t.repeatRule==='monthly');
+    // 恢复为每周，避免影响后续用例
+    await fetch('http://127.0.0.1:3002/api/tasks/11',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({...await taskById(11),repeatRule:'weekly'})});
+  });
+  await check('keyboard shortcuts navigate and focus',async()=>{
+    await nav(page,'最近 7 天');
+    await page.keyboard.press('n');
+    assert.equal(await page.getByRole('textbox',{name:'添加任务',exact:true}).evaluate(el=>el===document.activeElement),true,'N 应聚焦添加输入框');
+    // 焦点回到空白处后 T 才会生效（输入框内按键被守卫忽略）
+    await page.locator('.wb-list-header h1').click();
+    await page.keyboard.press('t');
+    await page.locator('h1').filter({hasText:'今天'}).waitFor();
+    await page.keyboard.press('Control+f');
+    await page.locator('h1').filter({hasText:'搜索任务'}).waitFor();
+    assert.equal(await page.getByRole('textbox',{name:'搜索任务'}).evaluate(el=>el===document.activeElement),true,'Ctrl+F 应聚焦搜索框');
+    await nav(page,'今天');
+  });
+  await check('dark appearance persists across reload',async()=>{
+    await page.locator('.wb-nav-footer').getByRole('button',{name:'设置'}).click();
+    await page.locator('#wb-appearance').selectOption('dark');
+    assert.equal(await page.evaluate(()=>document.documentElement.classList.contains('dark')),true);
+    await page.reload();await page.locator('.wb-main-pane h1').waitFor();
+    assert.equal(await page.evaluate(()=>document.documentElement.classList.contains('dark')),true,'刷新后应保持深色');
+    await page.locator('.wb-nav-footer').getByRole('button',{name:'设置'}).click();
+    await page.locator('#wb-appearance').selectOption('light');
+    assert.equal(await page.evaluate(()=>document.documentElement.classList.contains('dark')),false);
+    await page.keyboard.press('Escape');await page.locator('.wb-settings-popover').waitFor({state:'hidden'});
+  });
+  await check('backup export downloads valid json',async()=>{
+    await page.keyboard.press('Escape');
+    await page.locator('.wb-nav-footer').getByRole('button',{name:'设置'}).click();
+    await page.getByRole('button',{name:'导出备份'}).waitFor();
+    const downloadPromise=page.waitForEvent('download');
+    await page.getByRole('button',{name:'导出备份'}).click();
+    const download=await downloadPromise;
+    assert.match(download.suggestedFilename(),/^workbench-backup-\d{4}-\d{2}-\d{2}\.json$/);
+    const content=JSON.parse(await readFile(await download.path(),'utf8'));
+    assert.equal(content.app,'workbench');assert.ok(Array.isArray(content.tasks)&&content.tasks.length>0);assert.ok(Array.isArray(content.completions));
+  });
+  await check('recycle permanent delete purges task',async()=>{
+    await nav(page,'今天');const r=await row(page,'给家里买牛奶和鸡蛋');await r.getByRole('button',{name:'更多操作：给家里买牛奶和鸡蛋'}).click();await page.getByRole('button',{name:'删除事项',exact:true}).click();await page.getByRole('group',{name:'确认删除',exact:true}).getByRole('button',{name:'确认',exact:true}).click();await r.waitFor({state:'hidden'});
+    await nav(page,'回收站');const recycled=await row(page,'给家里买牛奶和鸡蛋');
+    await recycled.getByRole('button',{name:'永久删除事项'}).click();
+    await page.getByRole('group',{name:'确认永久删除',exact:true}).getByRole('button',{name:'永久删除',exact:true}).click();
+    await recycled.waitFor({state:'hidden'});
+    assert.equal(await taskById(5),undefined,'永久删除后任务应不存在');
+    await waitText(page,'回收站是空的');
   });
   await check('calendar remains reachable',async()=>{await nav(page,'日历');await page.locator('.fc-daygrid-day').first().waitFor();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);});
   await check('tabs switch fast with large data',async()=>{

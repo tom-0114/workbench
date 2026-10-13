@@ -115,6 +115,13 @@ function cancelEdit() {
   mode.value = "idle";
 }
 
+// Enter 直接保存；输入法选词中的 Enter 不触发，也不拦截默认行为
+function onEditorEnter(event: KeyboardEvent) {
+  if (event.isComposing) return;
+  event.preventDefault();
+  void saveEdit();
+}
+
 async function saveEdit() {
   const title = draftTitle.value.trim();
   if (!title || busy.value) return;
@@ -241,7 +248,7 @@ async function confirmDelete() {
         v-model="draftTitle"
         :aria-label="`编辑：${occurrence.task.title}`"
         :disabled="busy"
-        @keydown.enter.prevent="saveEdit"
+        @keydown.enter="onEditorEnter"
         @keydown.esc.prevent="cancelEdit"
       />
       <button
@@ -340,7 +347,7 @@ async function confirmDelete() {
             <button type="button" role="radio" :aria-checked="scope === 'series'" :class="{ 'is-current': scope === 'series' }" @click="scope = 'series'">整个系列</button>
           </div>
           <p v-if="occurrence.isVirtual" class="wb-date-hint">
-            {{ scope === "once" ? "只把这一次移到所选日期，之后的重复照旧" : "整个系列将改为从所选日期开始重复" }}
+            {{ scope === "once" ? "只移动这一天，后续重复不变" : "整个系列将从所选日期重新开始" }}
           </p>
           <div class="wb-date-quick">
             <button type="button" :disabled="dateBusy" @click="applyDate(store.currentDate)">今天</button>

@@ -166,6 +166,11 @@ export const useTaskStore = defineStore("tasks", {
      */
     async rescheduleOccurrence(occ: Occurrence, newDate: string, scope: "once" | "series" = "series") {
       const task = occ.task;
+      // 原生日历输入框可以被清空；重复任务没有锚点日期就无法展开，这里明确拒绝
+      if (!newDate && task.repeatRule !== "none") {
+        this.operationError = "重复任务需要保留日期，可在详情里改为不重复";
+        return;
+      }
       if (occ.isVirtual && task.repeatRule !== "none" && scope === "once") {
         const overrides = { ...(task.dateOverrides ?? {}) };
         if (newDate === occ.date) delete overrides[occ.date];
