@@ -1,0 +1,146 @@
+[
+  {
+    "file": "today-1440x900.png",
+    "state": "today",
+    "size": "1440x900",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "upcoming-1440x900.png",
+    "state": "upcoming",
+    "size": "1440x900",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "inbox-1440x900.png",
+    "state": "inbox",
+    "size": "1440x900",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "calendar-1440x900.png",
+    "state": "calendar",
+    "size": "1440x900",
+    "zoom": 1,
+    "animationWaitMs": 113,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "today-1440x900-@2x.png",
+    "state": "today",
+    "size": "1440x900",
+    "zoom": 2,
+    "animationWaitMs": 99,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "upcoming-1440x900-@2x.png",
+    "state": "upcoming",
+    "size": "1440x900",
+    "zoom": 2,
+    "animationWaitMs": 19,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "inbox-1440x900-@2x.png",
+    "state": "inbox",
+    "size": "1440x900",
+    "zoom": 2,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "calendar-1440x900-@2x.png",
+    "state": "calendar",
+    "size": "1440x900",
+    "zoom": 2,
+    "animationWaitMs": 45,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "today-390x844.png",
+    "state": "today",
+    "size": "390x844",
+    "zoom": 1,
+    "animationWaitMs": 53,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "upcoming-390x844.png",
+    "state": "upcoming",
+    "size": "390x844",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "inbox-390x844.png",
+    "state": "inbox",
+    "size": "390x844",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "calendar-390x844.png",
+    "state": "calendar",
+    "size": "390x844",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "today-390x844-@2x.png",
+    "state": "today",
+    "size": "390x844",
+    "zoom": 2,
+    "animationWaitMs": 48,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "upcoming-390x844-@2x.png",
+    "state": "upcoming",
+    "size": "390x844",
+    "zoom": 2,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "inbox-390x844-@2x.png",
+    "state": "inbox",
+    "size": "390x844",
+    "zoom": 2,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "calendar-390x844-@2x.png",
+    "state": "calendar",
+    "size": "390x844",
+    "zoom": 2,
+    "animationWaitMs": 249,
+    "issues": [],
+    "lint": []
+  }
+]

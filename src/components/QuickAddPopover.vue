@@ -80,7 +80,7 @@ onBeforeUnmount(() => {
       :style="{ ...style, boxShadow: '0 4px 24px rgba(0,0,0,0.10), 0 1px 3px rgba(0,0,0,0.06)' }"
       @submit.prevent="submit"
     >
-      <div class="mb-1.5 flex items-baseline justify-between gap-2 px-1 text-[11px]">
+      <div class="mb-1.5 flex flex-wrap items-baseline justify-between gap-2 px-1 text-[13px]">
         <span style="color: var(--text-tertiary)">添加到 {{ props.date }}</span>
         <span v-if="hasApplied" style="color: var(--accent-color)">{{ parsed.hint }}</span>
       </div>
@@ -103,7 +103,7 @@ onBeforeUnmount(() => {
       </div>
       <div
         v-if="hasApplied"
-        class="mt-1 px-1 text-[11px]"
+        class="mt-1 px-1 text-[13px]"
         style="color: var(--text-tertiary)"
       >
         将创建到 {{ parsed.dueDate ?? props.date }}<template v-if="parsed.repeatRule"> · {{ parsed.hint }}</template>

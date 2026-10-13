@@ -1,58 +1,29 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue";
-import { useMediaQuery } from "@vueuse/core";
-import { AlertCircle, CalendarDays, ListTodo, LoaderCircle, RefreshCw, X } from "lucide-vue-next";
+import { AlertCircle, LoaderCircle, RefreshCw, X } from "lucide-vue-next";
 import { useTaskStore } from "@/stores/tasks";
 import { getSession, login, logout } from "@/lib/auth";
 import type { Occurrence } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import LoginPage from "@/components/LoginPage.vue";
-import MonthView from "@/components/MonthView.vue";
-import TodayPanel from "@/components/TodayPanel.vue";
+import TaskWorkspace from "@/components/TaskWorkspace.vue";
 import TaskDialog from "@/components/TaskSheet.vue";
 
 const store = useTaskStore();
 
 const taskDialogOpen = ref(false);
 const currentOcc = ref<Occurrence | null>(null);
-const isMobile = useMediaQuery("(max-width: 767px)");
-const mobilePane = ref<"today" | "calendar">("calendar");
+const taskEditor = ref<InstanceType<typeof TaskDialog>>();
 const appState = ref<"checking" | "guest" | "loading" | "ready" | "error">("checking");
 const loginBusy = ref(false);
 const loginError = ref("");
 let authRevision = 0;
 
-function setMobilePane(pane: "today" | "calendar") {
-  mobilePane.value = pane;
-}
-
 function openTask(occ: Occurrence) {
+  if (taskDialogOpen.value && currentOcc.value?.task.id === occ.task.id && currentOcc.value.date === occ.date) return;
+  if (taskDialogOpen.value && taskEditor.value && !taskEditor.value.canSwitch()) return;
   currentOcc.value = occ;
   taskDialogOpen.value = true;
-}
-
-/* 侧边栏宽度：可拖拽调节并记忆 */
-const sidebarWidth = ref(
-  Math.min(420, Math.max(220, Number(localStorage.getItem("wb.sidebarWidth")) || 288)),
-);
-const resizing = ref(false);
-
-function startResize(e: PointerEvent) {
-  e.preventDefault();
-  resizing.value = true;
-  const startX = e.clientX;
-  const startW = sidebarWidth.value;
-  const move = (ev: PointerEvent) => {
-    sidebarWidth.value = Math.min(420, Math.max(220, startW + ev.clientX - startX));
-  };
-  const up = () => {
-    resizing.value = false;
-    localStorage.setItem("wb.sidebarWidth", String(sidebarWidth.value));
-    window.removeEventListener("pointermove", move);
-    window.removeEventListener("pointerup", up);
-  };
-  window.addEventListener("pointermove", move);
-  window.addEventListener("pointerup", up);
 }
 
 async function loadWorkspace() {
@@ -145,55 +116,14 @@ onBeforeUnmount(() => window.removeEventListener("wb:auth-required", onAuthRequi
 
   <div
     v-else
-    class="wb-app-shell flex overflow-hidden max-md:flex-col md:flex-row"
-    :class="resizing ? 'select-none' : ''"
+    class="wb-app-shell wb-todo-shell"
   >
-    <TodayPanel
-      class="wb-today-panel min-h-0 shrink-0"
-      :class="isMobile && mobilePane !== 'today' ? 'hidden' : 'max-md:w-full max-md:flex-1'"
-      :style="
-        isMobile
-          ? { background: 'var(--bg-secondary)' }
-          : { width: sidebarWidth + 'px', background: 'var(--bg-secondary)' }
-      "
+    <TaskWorkspace
+      :selected-key="taskDialogOpen && currentOcc ? `${currentOcc.task.id}:${currentOcc.date}` : ''"
       @open-task="openTask"
       @logout="handleLogout"
     />
-    <!-- 侧边栏宽度拖拽手柄 -->
-    <div
-      v-if="!isMobile"
-      class="relative z-10 -mx-0.5 w-1 shrink-0 cursor-col-resize transition-colors"
-      :style="{ background: resizing ? 'var(--accent-color)' : 'var(--border-subtle)' }"
-      title="拖动调整侧栏宽度"
-      @pointerdown="startResize"
-    />
-    <MonthView
-      v-show="!isMobile || mobilePane === 'calendar'"
-      class="min-h-0 min-w-0 flex-1 max-md:w-full"
-      @open-task="openTask"
-    />
-
-    <nav v-if="isMobile" class="wb-mobile-nav" aria-label="主要页面">
-      <button
-        type="button"
-        :class="mobilePane === 'today' ? 'is-active' : ''"
-        :aria-current="mobilePane === 'today' ? 'page' : undefined"
-        @click="setMobilePane('today')"
-      >
-        <ListTodo aria-hidden="true" />
-        <span>今天</span>
-      </button>
-      <button
-        type="button"
-        :class="mobilePane === 'calendar' ? 'is-active' : ''"
-        :aria-current="mobilePane === 'calendar' ? 'page' : undefined"
-        @click="setMobilePane('calendar')"
-      >
-        <CalendarDays aria-hidden="true" />
-        <span>日历</span>
-      </button>
-    </nav>
-    <TaskDialog v-model:open="taskDialogOpen" :occurrence="currentOcc" />
+    <TaskDialog ref="taskEditor" v-model:open="taskDialogOpen" :occurrence="currentOcc" inline-desktop />
 
     <div v-if="store.operationError" class="wb-operation-error" role="alert">
       <AlertCircle aria-hidden="true" />

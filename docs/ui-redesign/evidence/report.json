@@ -1,0 +1,361 @@
+[
+  {
+    "file": "today-1440x900.png",
+    "state": "today",
+    "size": "1440x900",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "upcoming-1440x900.png",
+    "state": "upcoming",
+    "size": "1440x900",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "inbox-1440x900.png",
+    "state": "inbox",
+    "size": "1440x900",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "calendar-1440x900.png",
+    "state": "calendar",
+    "size": "1440x900",
+    "zoom": 1,
+    "animationWaitMs": 62,
+    "issues": [],
+    "lint": [
+      {
+        "rule": "contrastLow",
+        "label": "文字对比度不达标（正文低于 4.5:1，大字低于 3:1）",
+        "count": 7,
+        "examples": [
+          "span.wb-day-badge「国庆·休」（3.76:1）",
+          "span.wb-day-badge「国庆·休」（3.76:1）",
+          "span.wb-day-badge「国庆·休」（3.76:1）"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "today-390x844.png",
+    "state": "today",
+    "size": "390x844",
+    "zoom": 1,
+    "animationWaitMs": 33,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "upcoming-390x844.png",
+    "state": "upcoming",
+    "size": "390x844",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "inbox-390x844.png",
+    "state": "inbox",
+    "size": "390x844",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "calendar-390x844.png",
+    "state": "calendar",
+    "size": "390x844",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": [
+      {
+        "rule": "contrastLow",
+        "label": "文字对比度不达标（正文低于 4.5:1，大字低于 3:1）",
+        "count": 1,
+        "examples": [
+          "span.wb-title「回复合作方的邮件」（2.63:1）"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "today-1440x900-@2x.png",
+    "state": "today",
+    "size": "1440x900",
+    "zoom": 2,
+    "animationWaitMs": 27,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "today-390x844-@2x.png",
+    "state": "today",
+    "size": "390x844",
+    "zoom": 2,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "motion-probe-detail",
+    "state": "today",
+    "size": "1440x900",
+    "zoom": 1,
+    "group": "detail",
+    "motion": {
+      "load": {
+        "elements": 1,
+        "loops": 0,
+        "maxMove": 5,
+        "maxSize": 0,
+        "maxOpacity": 0.95,
+        "top": [
+          {
+            "el": "main.wb-main-pane",
+            "move": 5,
+            "size": 0,
+            "opacity": 0.95,
+            "loop": false,
+            "sources": [
+              "css:wb-list-enter"
+            ]
+          }
+        ]
+      },
+      "steps": {
+        "elements": 1,
+        "loops": 0,
+        "maxMove": 12,
+        "maxSize": 0,
+        "maxOpacity": 0.84,
+        "top": [
+          {
+            "el": "aside.wb-detail-panel",
+            "move": 12,
+            "size": 0,
+            "opacity": 0.84,
+            "loop": false,
+            "sources": [
+              "css:wb-detail-enter"
+            ]
+          }
+        ]
+      },
+      "hero": {
+        "elements": 0,
+        "loops": 0,
+        "maxMove": 0,
+        "maxSize": 0,
+        "maxOpacity": 0,
+        "top": [],
+        "layers": 0
+      },
+      "scroll": {
+        "elements": 0,
+        "loops": 0,
+        "maxMove": 0,
+        "maxSize": 0,
+        "maxOpacity": 0,
+        "top": [],
+        "scrollable": false
+      }
+    },
+    "issues": []
+  },
+  {
+    "file": "motion-probe-navigation",
+    "state": "today",
+    "size": "1440x900",
+    "zoom": 1,
+    "group": "navigation",
+    "motion": {
+      "load": {
+        "elements": 1,
+        "loops": 0,
+        "maxMove": 5,
+        "maxSize": 0,
+        "maxOpacity": 0.95,
+        "top": [
+          {
+            "el": "main.wb-main-pane",
+            "move": 5,
+            "size": 0,
+            "opacity": 0.95,
+            "loop": false,
+            "sources": [
+              "css:wb-list-enter"
+            ]
+          }
+        ]
+      },
+      "steps": {
+        "elements": 0,
+        "loops": 0,
+        "maxMove": 0,
+        "maxSize": 0,
+        "maxOpacity": 0,
+        "top": []
+      },
+      "hero": {
+        "elements": 0,
+        "loops": 0,
+        "maxMove": 0,
+        "maxSize": 0,
+        "maxOpacity": 0,
+        "top": [],
+        "layers": 0
+      },
+      "scroll": {
+        "elements": 0,
+        "loops": 0,
+        "maxMove": 0,
+        "maxSize": 0,
+        "maxOpacity": 0,
+        "top": [],
+        "scrollable": false
+      }
+    },
+    "issues": [
+      "--steps 动作：没有检测到动画"
+    ]
+  },
+  {
+    "file": "motion-entry-end.jpg",
+    "state": "today",
+    "size": "1440x900",
+    "zoom": 1,
+    "group": "entry",
+    "issues": [
+      "录屏：没装 ffmpeg，只留了 motion-entry-start/mid/end.jpg 三帧"
+    ],
+    "frames": {
+      "start": {
+        "file": "motion-entry-start.jpg",
+        "source": "Page.screencastFrame",
+        "timeMs": 282
+      },
+      "mid": {
+        "file": "motion-entry-mid.jpg",
+        "source": "Page.screencastFrame",
+        "timeMs": 504
+      },
+      "end": {
+        "file": "motion-entry-end.jpg",
+        "source": "Page.captureScreenshot",
+        "timeMs": 1938
+      }
+    },
+    "sampling": {
+      "mode": "entry"
+    },
+    "durationMs": 1938,
+    "consistency": {
+      "status": "matched",
+      "reference": "motion-entry-end.jpg",
+      "different": false,
+      "changedPixels": 0,
+      "maxTilePixels": 0,
+      "pixelRatio": 0
+    },
+    "failed": true
+  },
+  {
+    "file": "motion-detail-end.jpg",
+    "state": "today",
+    "size": "1440x900",
+    "zoom": 1,
+    "group": "detail",
+    "issues": [
+      "录屏：没装 ffmpeg，只留了 motion-detail-start/mid/end.jpg 三帧"
+    ],
+    "frames": {
+      "start": {
+        "file": "motion-detail-start.jpg",
+        "source": "Page.captureScreenshot",
+        "timeMs": 580
+      },
+      "mid": {
+        "file": "motion-detail-mid.jpg",
+        "source": "Page.screencastFrame",
+        "timeMs": 720
+      },
+      "end": {
+        "file": "motion-detail-end.jpg",
+        "source": "Page.captureScreenshot",
+        "timeMs": 1962
+      }
+    },
+    "sampling": {
+      "mode": "action",
+      "step": 1,
+      "action": "click",
+      "raw": "click .wb-task-list .wb-sidebar-title"
+    },
+    "durationMs": 1962,
+    "consistency": {
+      "status": "matched",
+      "reference": "motion-detail-end.jpg",
+      "different": false,
+      "changedPixels": 0,
+      "maxTilePixels": 0,
+      "pixelRatio": 0
+    },
+    "failed": true
+  },
+  {
+    "file": "motion-navigation-end.jpg",
+    "state": "today",
+    "size": "1440x900",
+    "zoom": 1,
+    "group": "navigation",
+    "issues": [
+      "录屏：没装 ffmpeg，只留了 motion-navigation-start/mid/end.jpg 三帧"
+    ],
+    "frames": {
+      "start": {
+        "file": "motion-navigation-start.jpg",
+        "source": "Page.captureScreenshot",
+        "timeMs": 584
+      },
+      "mid": {
+        "file": "motion-navigation-mid.jpg",
+        "source": "Page.screencastFrame",
+        "timeMs": 689
+      },
+      "end": {
+        "file": "motion-navigation-end.jpg",
+        "source": "Page.captureScreenshot",
+        "timeMs": 1956
+      }
+    },
+    "sampling": {
+      "mode": "action",
+      "step": 1,
+      "action": "click",
+      "raw": "click .wb-nav-item:nth-child(3)"
+    },
+    "durationMs": 1956,
+    "consistency": {
+      "status": "matched",
+      "reference": "motion-navigation-end.jpg",
+      "different": false,
+      "changedPixels": 0,
+      "maxTilePixels": 0,
+      "pixelRatio": 0
+    },
+    "failed": true
+  }
+]

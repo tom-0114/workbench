@@ -51,24 +51,24 @@ const repeatOptions: Task["repeatRule"][] = [
 
 <template>
   <div class="flex flex-1 flex-col overflow-hidden">
-    <div class="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-4">
-      <div class="space-y-1.5">
+    <fieldset :disabled="saving || removing" class="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-4">
+      <div class="wb-form-field">
         <Label for="wb-title">标题</Label>
         <Input id="wb-title" v-model="draft.title" placeholder="事项标题" @keydown.enter="onEnterKey" />
       </div>
 
-      <div class="space-y-1.5">
+      <div class="wb-form-field">
         <Label for="wb-date">日期</Label>
         <Input id="wb-date" v-model="draft.dueDate" type="date" />
-        <p class="text-[11px]" style="color: var(--text-tertiary)">
+        <p class="text-[13px]" style="color: var(--text-secondary)">
           清空日期将移入收集箱
         </p>
       </div>
 
       <div class="grid grid-cols-2 gap-3">
-        <div class="space-y-1.5">
+        <div class="wb-form-field">
           <Label>优先级</Label>
-          <Select v-model="draft.priority">
+          <Select v-model="draft.priority" :disabled="saving || removing">
             <SelectTrigger class="w-full">
               <SelectValue />
             </SelectTrigger>
@@ -82,9 +82,9 @@ const repeatOptions: Task["repeatRule"][] = [
           </Select>
         </div>
 
-        <div class="space-y-1.5">
+        <div class="wb-form-field">
           <Label>重复</Label>
-          <Select v-model="draft.repeatRule">
+          <Select v-model="draft.repeatRule" :disabled="saving || removing">
             <SelectTrigger class="w-full">
               <SelectValue />
             </SelectTrigger>
@@ -99,18 +99,18 @@ const repeatOptions: Task["repeatRule"][] = [
         </div>
       </div>
 
-      <div class="space-y-1.5">
+      <div class="wb-form-field">
         <Label for="wb-tags">标签（逗号分隔）</Label>
         <Input id="wb-tags" v-model="tagsInput" placeholder="如：工作, 学习" @keydown.enter="onEnterKey" />
       </div>
 
-      <div class="space-y-1.5">
+      <div class="wb-form-field">
         <Label for="wb-notes">备注</Label>
         <Textarea
           id="wb-notes"
           v-model="draft.notes"
           rows="4"
-          placeholder="详情备注…（Shift+Enter 换行）"
+          placeholder="添加备注…"
           @keydown.enter="onEnterKey"
         />
       </div>
@@ -122,7 +122,7 @@ const repeatOptions: Task["repeatRule"][] = [
         <input v-model="draft.completed" type="checkbox" class="h-4 w-4" />
         已完成
       </label>
-    </div>
+    </fieldset>
 
     <div
       class="flex flex-row items-center justify-between border-t px-6 py-3"

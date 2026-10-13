@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from "vue";
-import { CalendarArrowDown, CalendarClock, Check, Inbox, LoaderCircle, Pencil, Trash2, X } from "lucide-vue-next";
+import { CalendarArrowDown, CalendarClock, Check, Flag, Inbox, LoaderCircle, MoreHorizontal, Pencil, Repeat2, Trash2, X } from "lucide-vue-next";
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useTaskStore } from "@/stores/tasks";
 import type { Occurrence } from "@/lib/types";
 import { addDays } from "@/lib/date";
@@ -15,6 +16,7 @@ const props = withDefaults(
     canMoveInbox?: boolean;
     canPostpone?: boolean;
     draggable?: boolean;
+    selected?: boolean;
   }>(),
   {
     inlineEdit: true,
@@ -23,6 +25,7 @@ const props = withDefaults(
     canMoveInbox: false,
     canPostpone: false,
     draggable: false,
+    selected: false,
   },
 );
 
@@ -33,6 +36,7 @@ const mode = ref<"idle" | "edit" | "delete">("idle");
 const draftTitle = ref(props.occurrence.task.title);
 const busy = ref(false);
 const inputEl = ref<HTMLInputElement>();
+const actionsOpen = ref(false);
 
 watch(
   () => props.occurrence.task.title,
@@ -78,6 +82,8 @@ async function saveEdit() {
 }
 
 async function toggleCompletion(event: MouseEvent) {
+  if (busy.value) return;
+  busy.value = true;
   const circle = event.currentTarget as HTMLElement | null;
   circle?.classList.add("wb-pop");
   setTimeout(() => circle?.classList.remove("wb-pop"), 300);
@@ -85,6 +91,8 @@ async function toggleCompletion(event: MouseEvent) {
     await store.toggleOccurrence(props.occurrence);
   } catch {
     // Store 会保留原状态并显示全局错误提示。
+  } finally {
+    busy.value = false;
   }
 }
 
@@ -152,8 +160,9 @@ async function confirmDelete() {
       occurrence.completed ? 'wb-item-done' : '',
       draggable ? 'is-draggable' : '',
       mode !== 'idle' ? 'is-active' : '',
+      selected ? 'is-selected' : '',
     ]"
-    :data-task-id="draggable ? occurrence.task.id : undefined"
+    :data-task-id="occurrence.task.id"
     :draggable="draggable && mode === 'idle' && !occurrence.isVirtual"
     @dragstart="onDragStart"
     @dragend="onDragEnd"
@@ -161,6 +170,10 @@ async function confirmDelete() {
     <button
       type="button"
       class="wb-check"
+      role="checkbox"
+      :aria-checked="occurrence.completed"
+      :disabled="busy"
+      :data-priority="occurrence.task.priority"
       :class="occurrence.completed ? 'done' : ''"
       :aria-label="occurrence.completed ? `取消完成：${occurrence.task.title}` : `完成：${occurrence.task.title}`"
       :title="occurrence.completed ? '取消完成' : '完成'"
@@ -207,20 +220,15 @@ async function confirmDelete() {
 
     <template v-else>
       <button type="button" class="wb-sidebar-title" @click="beginEdit">
-        <span :class="occurrence.completed ? 'line-through' : ''" :title="occurrence.task.title">
-          {{ occurrence.task.title }}
-        </span>
-        <span
-          v-if="occurrence.isVirtual"
-          class="wb-repeat-mark"
-          aria-label="重复事项"
-          title="重复任务实例：不支持拖拽，编辑将作用于整个系列"
-        >↻</span>
+        <span class="wb-row-copy"><span class="wb-task-name" :class="occurrence.completed ? 'line-through' : ''">{{ occurrence.task.title }}</span><span v-if="occurrence.task.tags.length" class="wb-row-tags"><span v-for="tag in occurrence.task.tags" :key="tag">#{{ tag }}</span></span></span>
+        <Repeat2 v-if="occurrence.isVirtual" class="wb-repeat-mark" aria-label="重复任务" />
       </button>
-      <span v-if="occurrence.task.priority > 0" class="wb-pri" :class="`wb-pri-${occurrence.task.priority}`" />
+      <Flag v-if="occurrence.task.priority > 0" class="wb-task-priority" :class="`wb-pri-${occurrence.task.priority}`" :aria-label="`${['无','低','中','高'][occurrence.task.priority]}优先级`" />
       <span v-if="meta" class="wb-row-meta">{{ meta }}</span>
 
-      <div class="wb-row-actions">
+      <Popover v-model:open="actionsOpen">
+        <PopoverTrigger as-child><button class="wb-control wb-task-more" :aria-label="`更多操作：${occurrence.task.title}`"><MoreHorizontal /></button></PopoverTrigger>
+        <PopoverContent class="wb-task-actions-menu" side="bottom" align="end" @click="actionsOpen=false">
         <button
           v-if="inlineEdit"
           type="button"
@@ -229,6 +237,7 @@ async function confirmDelete() {
           @click="beginEdit"
         >
           <Pencil aria-hidden="true" />
+          编辑标题
         </button>
         <!-- 改期类操作会移动整个系列，重复任务实例不显示 -->
         <button
@@ -239,6 +248,7 @@ async function confirmDelete() {
           @click="moveToday"
         >
           <CalendarClock aria-hidden="true" />
+          移到今天
         </button>
         <button
           v-if="canPostpone && !occurrence.isVirtual"
@@ -248,6 +258,7 @@ async function confirmDelete() {
           @click="postpone"
         >
           <CalendarArrowDown aria-hidden="true" />
+          推迟到明天
         </button>
         <button
           v-if="canMoveInbox && !occurrence.isVirtual"
@@ -257,6 +268,7 @@ async function confirmDelete() {
           @click="moveInbox"
         >
           <Inbox aria-hidden="true" />
+          移到收集箱
         </button>
         <button
           type="button"
@@ -266,8 +278,10 @@ async function confirmDelete() {
           @click="mode = 'delete'"
         >
           <Trash2 aria-hidden="true" />
+          删除任务
         </button>
-      </div>
+        </PopoverContent>
+      </Popover>
     </template>
   </li>
 </template>

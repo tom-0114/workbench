@@ -1,0 +1,130 @@
+[
+  {
+    "name": "desktop-list",
+    "result": "PASS",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    }
+  },
+  {
+    "name": "desktop-detail",
+    "result": "PASS",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    }
+  },
+  {
+    "name": "desktop-completed",
+    "result": "PASS",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    }
+  },
+  {
+    "name": "desktop-upcoming",
+    "result": "PASS",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    }
+  },
+  {
+    "name": "mobile-list",
+    "result": "PASS",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    }
+  },
+  {
+    "name": "mobile-navigation",
+    "result": "PASS",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    }
+  },
+  {
+    "name": "mobile-detail",
+    "result": "PASS",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    }
+  },
+  {
+    "name": "viewport-320",
+    "result": "PASS",
+    "viewport": {
+      "width": 320,
+      "height": 900
+    }
+  },
+  {
+    "name": "viewport-720",
+    "result": "PASS",
+    "viewport": {
+      "width": 720,
+      "height": 900
+    }
+  },
+  {
+    "name": "viewport-768",
+    "result": "PASS",
+    "viewport": {
+      "width": 768,
+      "height": 900
+    }
+  },
+  {
+    "name": "viewport-1024",
+    "result": "PASS",
+    "viewport": {
+      "width": 1024,
+      "height": 900
+    }
+  },
+  {
+    "name": "viewport-1100",
+    "result": "PASS",
+    "viewport": {
+      "width": 1100,
+      "height": 900
+    }
+  },
+  {
+    "name": "viewport-1280",
+    "result": "PASS",
+    "viewport": {
+      "width": 1280,
+      "height": 900
+    }
+  },
+  {
+    "name": "viewport-1920",
+    "result": "PASS",
+    "viewport": {
+      "width": 1920,
+      "height": 900
+    }
+  },
+  {
+    "name": "dark-list",
+    "result": "PASS",
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    }
+  },
+  {
+    "name": "mobile-long-title",
+    "result": "PASS",
+    "viewport": {
+      "width": 390,
+      "height": 844
+    }
+  }
+]

@@ -1,0 +1,199 @@
+[
+  {
+    "file": "today-1440x900.png",
+    "state": "today",
+    "size": "1440x900",
+    "zoom": 1,
+    "animationWaitMs": 37,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "upcoming-1440x900.png",
+    "state": "upcoming",
+    "size": "1440x900",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "inbox-1440x900.png",
+    "state": "inbox",
+    "size": "1440x900",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "calendar-1440x900.png",
+    "state": "calendar",
+    "size": "1440x900",
+    "zoom": 1,
+    "animationWaitMs": 65,
+    "issues": [],
+    "lint": [
+      {
+        "rule": "contrastLow",
+        "label": "文字对比度不达标（正文低于 4.5:1，大字低于 3:1）",
+        "count": 3,
+        "examples": [
+          "span.wb-daynum「28」（1.83:1）",
+          "span.wb-daynum「29」（1.83:1）",
+          "span.wb-daynum「30」（1.83:1）"
+        ]
+      }
+    ]
+  },
+  {
+    "file": "today-390x844.png",
+    "state": "today",
+    "size": "390x844",
+    "zoom": 1,
+    "animationWaitMs": 23,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "upcoming-390x844.png",
+    "state": "upcoming",
+    "size": "390x844",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "inbox-390x844.png",
+    "state": "inbox",
+    "size": "390x844",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "calendar-390x844.png",
+    "state": "calendar",
+    "size": "390x844",
+    "zoom": 1,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "today-1440x900-@2x.png",
+    "state": "today",
+    "size": "1440x900",
+    "zoom": 2,
+    "animationWaitMs": 29,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "today-390x844-@2x.png",
+    "state": "today",
+    "size": "390x844",
+    "zoom": 2,
+    "animationWaitMs": 0,
+    "issues": [],
+    "lint": []
+  },
+  {
+    "file": "motion-probe",
+    "state": "today",
+    "size": "1440x900",
+    "zoom": 1,
+    "motion": {
+      "load": {
+        "elements": 2,
+        "loops": 0,
+        "maxMove": 9,
+        "maxSize": 0,
+        "maxOpacity": 0.95,
+        "top": [
+          {
+            "el": "div.wb-task-scroll",
+            "move": 9,
+            "size": 0,
+            "opacity": 0.92,
+            "loop": false,
+            "sources": [
+              "css:wb-list-enter"
+            ]
+          },
+          {
+            "el": "main.wb-main-pane",
+            "move": 5,
+            "size": 0,
+            "opacity": 0.95,
+            "loop": false,
+            "sources": [
+              "css:wb-list-enter"
+            ]
+          }
+        ]
+      },
+      "hero": {
+        "elements": 0,
+        "loops": 0,
+        "maxMove": 0,
+        "maxSize": 0,
+        "maxOpacity": 0,
+        "top": [],
+        "layers": 0
+      },
+      "scroll": {
+        "elements": 0,
+        "loops": 0,
+        "maxMove": 0,
+        "maxSize": 0,
+        "maxOpacity": 0,
+        "top": [],
+        "scrollable": false
+      }
+    },
+    "issues": []
+  },
+  {
+    "file": "motion-entry-end.jpg",
+    "state": "today",
+    "size": "1440x900",
+    "zoom": 1,
+    "group": "entry",
+    "issues": [
+      "录屏：ffmpeg 合成失败（Error splitting the argument list: Option not found），已保留 motion-entry-start/mid/end.jpg 三帧"
+    ],
+    "frames": {
+      "start": {
+        "file": "motion-entry-start.jpg",
+        "source": "Page.screencastFrame",
+        "timeMs": 295
+      },
+      "mid": {
+        "file": "motion-entry-mid.jpg",
+        "source": "Page.screencastFrame",
+        "timeMs": 546
+      },
+      "end": {
+        "file": "motion-entry-end.jpg",
+        "source": "Page.captureScreenshot",
+        "timeMs": 2011
+      }
+    },
+    "sampling": {
+      "mode": "entry"
+    },
+    "durationMs": 2011,
+    "consistency": {
+      "status": "matched",
+      "reference": "motion-entry-end.jpg",
+      "different": false,
+      "changedPixels": 0,
+      "maxTilePixels": 0,
+      "pixelRatio": 0
+    },
+    "failed": true
+  }
+]
