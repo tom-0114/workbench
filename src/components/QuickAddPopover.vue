@@ -18,6 +18,13 @@ const cardEl = ref<HTMLFormElement>();
 /** 移动端判定只取挂载时刻，弹层生命周期内视口不会跨断点变化 */
 const isMobileViewport = window.innerWidth < 768;
 
+/** “添加到 2026-10-14”太生硬，标题里用 10月14日 */
+const dateLabel = computed(() => {
+  const [y, m, d] = props.date.split("-").map(Number);
+  if (!y || !m || !d) return props.date;
+  return `${m}月${d}日`;
+});
+
 /** 自然语言解析（明天/周五/每天…），实时预览 */
 const parsed = computed(() => parseQuickAdd(title.value));
 const hasApplied = computed(() => !!(parsed.value.dueDate || parsed.value.repeatRule));
@@ -81,7 +88,7 @@ onBeforeUnmount(() => {
       @submit.prevent="submit"
     >
       <div class="mb-1.5 flex flex-wrap items-baseline justify-between gap-2 px-1 text-[13px]">
-        <span style="color: var(--text-tertiary)">添加到 {{ props.date }}</span>
+        <span style="color: var(--text-tertiary)">添加到 {{ dateLabel }}</span>
         <span v-if="hasApplied" style="color: var(--accent-color)">{{ parsed.hint }}</span>
       </div>
       <div class="flex gap-2">

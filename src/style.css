@@ -250,7 +250,7 @@
   .wb-task-group {margin-bottom:16px;}
   .wb-list-footer {padding:15px 20px max(15px,env(safe-area-inset-bottom));}
   .wb-quick-entry {gap:8px;padding-inline:10px;}
-  .wb-quick-entry input {font-size:14px;}
+  .wb-main-pane .wb-inline-editor button {width:32px;height:32px;}
   .wb-list-empty {min-height:230px;}
 }
 @media (prefers-reduced-motion:reduce) {
@@ -1578,6 +1578,16 @@ body.wb-task-dragging .wb-drop-zone.is-drop-active {
     font-size: 16px;
   }
 
+  /* 移动端输入一律 ≥16px：iOS 聚焦小字号输入框会强制放大页面。
+     本块位于文件后部，同权重时可覆盖前面的 13/14px 基础规则 */
+  .wb-quick-entry input,
+  .wb-search-field input,
+  .wb-inline-editor input,
+  .wb-date-pop-field input[type="date"],
+  .wb-sort select {
+    font-size: 16px;
+  }
+
   .wb-today-panel > div:first-child {
     padding-top: max(18px, env(safe-area-inset-top));
   }
@@ -1711,6 +1721,7 @@ body.wb-task-dragging .wb-drop-zone.is-drop-active {
 
   .wb-calendar .fc .fc-dayGridMonth-view .wb-event .wb-title {
     font-size: 10px;
+    line-height: 1.35;
   }
 
   .wb-task-dialog {

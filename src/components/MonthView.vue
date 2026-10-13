@@ -300,27 +300,34 @@ const options = computed<CalendarOptions>(() => ({
     const content = document.createElement("span");
     content.className = "wb-event-content";
 
-    const doneButton = document.createElement("button");
-    doneButton.type = "button";
-    doneButton.className = "wb-event-check";
-    doneButton.dataset.doneBtn = "";
-    doneButton.title = o.completed ? "取消完成" : "标记完成";
-    doneButton.setAttribute("aria-label", `${o.completed ? "取消完成" : "完成"}：${o.task.title}`);
-    doneButton.setAttribute("aria-pressed", String(o.completed));
-    doneButton.textContent = "✓";
-    // 勾选时轻量 pop 一下（120-220ms 量级，符合全局动效规范）
-    doneButton.addEventListener("click", () => {
-      doneButton.classList.add("wb-pop");
-      setTimeout(() => doneButton.classList.remove("wb-pop"), 300);
-    });
+    // 手机月视图格子只有几十像素宽：不放打卡按钮和重复标记，标题独占宽度换行两行；
+    // 完成与详情操作走默认的周列表或详情抽屉
+    const compactMonthGrid = isMobile.value && arg.view.type === "dayGridMonth";
+
+    if (!compactMonthGrid) {
+      const doneButton = document.createElement("button");
+      doneButton.type = "button";
+      doneButton.className = "wb-event-check";
+      doneButton.dataset.doneBtn = "";
+      doneButton.title = o.completed ? "取消完成" : "标记完成";
+      doneButton.setAttribute("aria-label", `${o.completed ? "取消完成" : "完成"}：${o.task.title}`);
+      doneButton.setAttribute("aria-pressed", String(o.completed));
+      doneButton.textContent = "✓";
+      // 勾选时轻量 pop 一下（120-220ms 量级，符合全局动效规范）
+      doneButton.addEventListener("click", () => {
+        doneButton.classList.add("wb-pop");
+        setTimeout(() => doneButton.classList.remove("wb-pop"), 300);
+      });
+      content.append(doneButton);
+    }
 
     const title = document.createElement("span");
     title.className = "wb-title";
     title.title = o.task.title;
     title.textContent = o.task.title;
+    content.append(title);
 
-    content.append(doneButton, title);
-    if (o.isVirtual) {
+    if (o.isVirtual && !compactMonthGrid) {
       const repeat = document.createElement("span");
       repeat.className = "wb-rep";
       repeat.textContent = "↻";

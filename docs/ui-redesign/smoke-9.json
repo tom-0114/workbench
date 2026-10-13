@@ -1,0 +1,118 @@
+{
+  "time": "2026-10-13T16:07:07.503Z",
+  "boundary": "Isolated local in-memory API; no production authentication or PostgreSQL verification",
+  "results": [
+    {
+      "name": "default list and desktop layout",
+      "result": "PASS"
+    },
+    {
+      "name": "add, edit, save and reload",
+      "result": "PASS"
+    },
+    {
+      "name": "unsaved detail cannot be replaced by another task",
+      "result": "PASS"
+    },
+    {
+      "name": "save failure retains draft and retry persists",
+      "result": "PASS"
+    },
+    {
+      "name": "add failure retains input and avoids duplicate",
+      "result": "PASS"
+    },
+    {
+      "name": "natural language quick add parses date",
+      "result": "PASS"
+    },
+    {
+      "name": "completion persists after reload and appears in history",
+      "result": "PASS"
+    },
+    {
+      "name": "recurrence completion applies to one day only",
+      "result": "PASS"
+    },
+    {
+      "name": "sort control reorders and groups collapse",
+      "result": "PASS"
+    },
+    {
+      "name": "row click edits title inline and ignores IME enter",
+      "result": "PASS"
+    },
+    {
+      "name": "quick date reschedules and can clear to inbox",
+      "result": "PASS"
+    },
+    {
+      "name": "quick priority sets high and tints the row",
+      "result": "PASS"
+    },
+    {
+      "name": "recurring quick date offers once vs series scope",
+      "result": "PASS"
+    },
+    {
+      "name": "moved occurrence reflects on calendar",
+      "result": "PASS"
+    },
+    {
+      "name": "calendar quick add, event click, complete and navigation",
+      "result": "PASS"
+    },
+    {
+      "name": "search covers title, notes and tags",
+      "result": "PASS"
+    },
+    {
+      "name": "reschedule through task menu",
+      "result": "PASS"
+    },
+    {
+      "name": "soft delete, recycle and restore",
+      "result": "PASS"
+    },
+    {
+      "name": "detail edits repeat rule for the series",
+      "result": "PASS"
+    },
+    {
+      "name": "keyboard shortcuts navigate and focus",
+      "result": "PASS"
+    },
+    {
+      "name": "dark appearance persists across reload",
+      "result": "PASS"
+    },
+    {
+      "name": "backup export downloads valid json",
+      "result": "PASS"
+    },
+    {
+      "name": "recycle permanent delete purges task",
+      "result": "PASS"
+    },
+    {
+      "name": "calendar remains reachable",
+      "result": "PASS"
+    },
+    {
+      "name": "tabs switch fast with large data",
+      "result": "PASS"
+    },
+    {
+      "name": "mobile navigation, inbox add and bottom sheet",
+      "result": "PASS"
+    },
+    {
+      "name": "mobile task menu remains accessible",
+      "result": "PASS"
+    },
+    {
+      "name": "mobile quick date and priority",
+      "result": "PASS"
+    }
+  ]
+}
