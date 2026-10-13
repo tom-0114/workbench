@@ -32,6 +32,13 @@ const emit = defineEmits<{
 const tagsInput = defineModel<string>("tagsInput", { required: true });
 
 const priorityOptions: (Task["priority"])[] = [0, 1, 2, 3];
+
+// Enter 直接保存；Shift+Enter 在备注里换行；输入法选词中的 Enter 不触发
+function onEnterKey(event: KeyboardEvent) {
+  if (event.isComposing || event.shiftKey) return;
+  event.preventDefault();
+  emit("save");
+}
 const repeatOptions: Task["repeatRule"][] = [
   "none",
   "daily",
@@ -47,7 +54,7 @@ const repeatOptions: Task["repeatRule"][] = [
     <div class="flex flex-1 flex-col gap-4 overflow-y-auto px-6 py-4">
       <div class="space-y-1.5">
         <Label for="wb-title">标题</Label>
-        <Input id="wb-title" v-model="draft.title" placeholder="事项标题" />
+        <Input id="wb-title" v-model="draft.title" placeholder="事项标题" @keydown.enter="onEnterKey" />
       </div>
 
       <div class="space-y-1.5">
@@ -94,12 +101,18 @@ const repeatOptions: Task["repeatRule"][] = [
 
       <div class="space-y-1.5">
         <Label for="wb-tags">标签（逗号分隔）</Label>
-        <Input id="wb-tags" v-model="tagsInput" placeholder="如：工作, 学习" />
+        <Input id="wb-tags" v-model="tagsInput" placeholder="如：工作, 学习" @keydown.enter="onEnterKey" />
       </div>
 
       <div class="space-y-1.5">
         <Label for="wb-notes">备注</Label>
-        <Textarea id="wb-notes" v-model="draft.notes" rows="4" placeholder="详情备注…" />
+        <Textarea
+          id="wb-notes"
+          v-model="draft.notes"
+          rows="4"
+          placeholder="详情备注…（Shift+Enter 换行）"
+          @keydown.enter="onEnterKey"
+        />
       </div>
 
       <label

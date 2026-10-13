@@ -50,6 +50,7 @@ watch(
 
 async function save() {
   if (!draft.value || saving.value || removing.value) return;
+  if (!draft.value.title.trim()) return; // 标题为空时 Enter 不触发保存
   draft.value.tags = tagsInput.value
     .split(/[,，]/)
     .map((s) => s.trim())
