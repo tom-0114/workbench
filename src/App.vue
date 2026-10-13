@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted, ref } from "vue";
 import { useMediaQuery } from "@vueuse/core";
 import { AlertCircle, CalendarDays, FolderKanban, ListTodo, LoaderCircle, RefreshCw, X } from "lucide-vue-next";
 import { useTaskStore } from "@/stores/tasks";
+import { useProjectStore } from "@/stores/projects";
 import { getSession, login, logout } from "@/lib/auth";
 import type { Occurrence } from "@/lib/types";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import TaskDialog from "@/components/TaskSheet.vue";
 import ProjectWorkbench from "@/components/projects/ProjectWorkbench.vue";
 
 const store = useTaskStore();
+const projectStore = useProjectStore();
 
 const taskDialogOpen = ref(false);
 const currentOcc = ref<Occurrence | null>(null);
@@ -98,9 +100,11 @@ async function handleLogin(credentials: { username: string; password: string }) 
 
 async function handleLogout() {
   try {
+    await projectStore.flushPending();
     await logout();
   } finally {
     store.resetData();
+    projectStore.reset();
     taskDialogOpen.value = false;
     appState.value = "guest";
   }
@@ -109,6 +113,7 @@ async function handleLogout() {
 function onAuthRequired() {
   authRevision += 1;
   store.resetData();
+  projectStore.reset();
   taskDialogOpen.value = false;
   loginError.value = "登录已失效，请重新登录";
   appState.value = "guest";

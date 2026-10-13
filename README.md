@@ -14,6 +14,7 @@ Vue 3 + FullCalendar 前端，Node.js + PostgreSQL 后端（`server/index.mjs`�
 - 中国节假日：法定假日（休）/ 调休上班（班）/ 周末 背景区分
 - 项目工作台（灵感工坊）：灵感速记、需求整理、任务规划、资料链接、项目动态
 - 备份：设置里一键导出 JSON（含回收站与打卡记录）
+- 多账号：管理员在「设置 → 账号与成员」创建账号、重置密码；各账号的任务、打卡、项目互相隔离
 - 全局搜索（Ctrl+F）、深色模式、快捷键 N / T / ← →
 
 ## 开发
@@ -31,7 +32,8 @@ npm run dev                          # 前端，/api 已代理到 3002
 
 - 后端：`server/index.mjs`（systemd `workbench-api.service`，127.0.0.1:3002），`DATABASE_URL` 指向本机 Docker PostgreSQL 的 `workbench` 库
 - 前端：`WEB_BASE_PATH=/workbench/ npm run build`，`dist/` 由 nginx 挂在 `/workbench/` 子路径，API 经 `/workbench/api/` 反代到 3002 端口
-- 鉴权：签名的 HttpOnly Cookie；生产环境需在 `server/.env` 配置 `AUTH_USERNAME`、`AUTH_PASSWORD_SHA256`、`AUTH_SECRET` 与 `AUTH_COOKIE_PATH=/workbench`，可参考 `server/.env.example`
+- 鉴权：签名的 HttpOnly Cookie；生产环境需在 `server/.env` 配置 `AUTH_SECRET` 与 `AUTH_COOKIE_PATH=/workbench`，可参考 `server/.env.example`
+- 账号：存在 `users` 表（密码 scrypt 哈希）。`AUTH_USERNAME`、`AUTH_PASSWORD_SHA256` 只在库里还没有管理员时用来创建首个管理员，之后改密码请在页面里操作；单用户时代的旧数据启动时自动归到该管理员名下
 - 公网安全：登录凭据只有在 HTTPS 下才会加密传输；绑定正式域名后应配置 TLS 证书并将 HTTP 重定向到 HTTPS
 
 ## License

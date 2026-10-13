@@ -20,6 +20,7 @@ import {
 } from "lucide-vue-next";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useProjectStore } from "@/stores/projects";
+import { userStorageKey } from "@/lib/auth";
 import type { InspirationType, Project, ProjectRequirement } from "@/lib/project-types";
 import { COLOR_META, STATUS_META, fmtTime } from "@/lib/project-types";
 import { compressImageToDataUrl } from "@/lib/image";
@@ -89,14 +90,21 @@ interface ReqDraft {
 
 function loadDrafts(): Drafts {
   try {
-    return JSON.parse(localStorage.getItem(DRAFT_KEY) || "{}");
+    const key = userStorageKey(DRAFT_KEY);
+    // 多用户前的草稿不分用户；上线时只有 admin 一个账号，首个读取者接管
+    const legacy = localStorage.getItem(DRAFT_KEY);
+    if (legacy !== null) {
+      if (localStorage.getItem(key) === null) localStorage.setItem(key, legacy);
+      localStorage.removeItem(DRAFT_KEY);
+    }
+    return JSON.parse(localStorage.getItem(key) || "{}");
   } catch {
     return {};
   }
 }
 function saveDrafts(drafts: Drafts) {
   try {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify(drafts));
+    localStorage.setItem(userStorageKey(DRAFT_KEY), JSON.stringify(drafts));
   } catch {
     /* 忽略隐私模式等写入失败 */
   }

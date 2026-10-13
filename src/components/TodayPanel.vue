@@ -11,6 +11,7 @@ import {
   Search,
   Settings2,
   Trash2,
+  UserCog,
   X,
 } from "lucide-vue-next";
 import { useMediaQuery } from "@vueuse/core";
@@ -21,6 +22,8 @@ import { loadAppearance, setAppearance } from "@/lib/appearance";
 import { parseQuickAdd } from "@/lib/nl-parse";
 import { addDays, parseDate } from "@/lib/date";
 import { downloadTaskBackup } from "@/lib/backup";
+import { currentUser } from "@/lib/auth";
+import AccountDialog from "@/components/AccountDialog.vue";
 import type { Occurrence, Task } from "@/lib/types";
 import { getDayMark } from "@/lib/cn-holidays";
 import { searchTasks } from "@/lib/search";
@@ -275,6 +278,8 @@ function fmtDueLabel(t: Task): string {
 }
 
 /* 备份：导出全部任务与打卡记录为 JSON */
+const accountOpen = ref(false);
+
 function exportBackup() {
   downloadTaskBackup(store.tasks, store.completions);
 }
@@ -691,8 +696,16 @@ onBeforeUnmount(() => window.removeEventListener(TASK_DRAG_END_EVENT, resetDropT
 
           <div class="flex flex-col gap-3">
             <div class="text-[12px]" style="color: var(--text-tertiary)">
-              已载入 {{ store.tasks.length }} 条任务
+              {{ currentUser?.username }} · 已载入 {{ store.tasks.length }} 条任务
             </div>
+            <button
+              type="button"
+              class="flex min-h-9 w-full items-center justify-center gap-2 rounded-md border text-[13px] transition-colors hover:bg-accent"
+              @click="accountOpen = true"
+            >
+              <UserCog :size="14" aria-hidden="true" />
+              {{ currentUser?.isAdmin ? "账号与成员" : "账号设置" }}
+            </button>
             <button
               type="button"
               class="flex min-h-9 w-full items-center justify-center gap-2 rounded-md border text-[13px] transition-colors hover:bg-accent"
@@ -721,5 +734,6 @@ onBeforeUnmount(() => window.removeEventListener(TASK_DRAG_END_EVENT, resetDropT
         </PopoverContent>
       </Popover>
     </div>
+    <AccountDialog v-model:open="accountOpen" />
   </aside>
 </template>

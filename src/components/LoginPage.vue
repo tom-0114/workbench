@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
+const LAST_USERNAME_KEY = "wb.lastUsername";
+
 const props = defineProps<{ busy: boolean; error: string }>();
 const emit = defineEmits<{
   (event: "submit", credentials: { username: string; password: string }): void;
 }>();
 
-const username = ref("admin");
+const username = ref(localStorage.getItem(LAST_USERNAME_KEY) ?? "");
 const password = ref("");
 const errorEl = ref<HTMLElement>();
 
@@ -34,7 +36,9 @@ watch(
 
 function submit() {
   if (props.busy) return;
-  emit("submit", { username: username.value.trim(), password: password.value });
+  const name = username.value.trim().toLowerCase();
+  localStorage.setItem(LAST_USERNAME_KEY, name);
+  emit("submit", { username: name, password: password.value });
 }
 </script>
 
@@ -54,7 +58,7 @@ function submit() {
         </div>
       </div>
 
-      <p class="wb-login-intro">你的任务、日历和收集箱只对登录用户开放。</p>
+      <p class="wb-login-intro">每个账号的任务、日历和项目各自独立，仅本人可见。</p>
 
       <form class="wb-login-form" :aria-busy="busy" @submit.prevent="submit">
         <div class="wb-login-field">
@@ -66,6 +70,7 @@ function submit() {
             autocomplete="username"
             autocapitalize="none"
             spellcheck="false"
+            :autofocus="!username"
             :disabled="busy"
             :aria-invalid="!!error"
           />
@@ -79,7 +84,7 @@ function submit() {
             name="password"
             type="password"
             autocomplete="current-password"
-            autofocus
+            :autofocus="!!username"
             :disabled="busy"
             :aria-invalid="!!error"
             :aria-describedby="error ? 'wb-login-error' : undefined"

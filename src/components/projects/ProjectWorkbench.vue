@@ -21,6 +21,7 @@ import {
 } from "lucide-vue-next";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useProjectStore } from "@/stores/projects";
+import { userStorageKey } from "@/lib/auth";
 import type { Project, ProjectInspiration, ProjectRequirement, ProjectStatus } from "@/lib/project-types";
 import { COLOR_META, STATUS_META, fmtTime } from "@/lib/project-types";
 import ProjectDialog from "./ProjectDialog.vue";
@@ -60,7 +61,7 @@ const selectedProject = computed(
 );
 
 watch(selectedId, (id) => {
-  if (id) localStorage.setItem("wb.pwb.selected", id);
+  if (id) localStorage.setItem(userStorageKey("wb.pwb.selected"), id);
 });
 watch(
   () => store.activeProjects.length,
@@ -200,7 +201,7 @@ function onKeydown(e: KeyboardEvent) {
 onMounted(() => {
   window.addEventListener("keydown", onKeydown);
   void store.init();
-  const last = localStorage.getItem("wb.pwb.selected");
+  const last = localStorage.getItem(userStorageKey("wb.pwb.selected"));
   if (last && store.activeProjects.some((p) => p.id === last)) selectedId.value = last;
 });
 onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown));

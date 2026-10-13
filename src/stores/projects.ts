@@ -11,6 +11,7 @@ import type {
   ProjectTask,
 } from "@/lib/project-types";
 import { newId } from "@/lib/project-types";
+import { currentUser, userStorageKey } from "@/lib/auth";
 
 const STORAGE_KEY = "wb.projects.v1";
 const API_BASE = `${import.meta.env.BASE_URL}api`;
@@ -159,9 +160,12 @@ function seedProjects(): Project[] {
   return list;
 }
 
+// 多用户前的缓存不分用户，无法判断归属，直接丢弃（服务端才是数据源）
+localStorage.removeItem(STORAGE_KEY);
+
 function loadLocal(): Project[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(userStorageKey(STORAGE_KEY));
     if (!raw) return seedProjects();
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return seedProjects();
@@ -213,7 +217,9 @@ class ProjectSyncRepo {
 }
 
 export const useProjectStore = defineStore("projects", () => {
-  const projects = ref<Project[]>(loadLocal());
+  const projects = ref<Project[]>([]);
+  /** projects 当前装的是哪个用户的数据 */
+  let loadedFor: string | null = null;
 
   /** idle=无待同步 syncing=同步中 error=有修改未同步 */
   const syncState = ref<"idle" | "syncing" | "error">("idle");
@@ -225,8 +231,9 @@ export const useProjectStore = defineStore("projects", () => {
   watch(
     projects,
     (value) => {
+      if (!loadedFor || loadedFor !== currentUser.value?.username) return;
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+        localStorage.setItem(userStorageKey(STORAGE_KEY), JSON.stringify(value));
       } catch {
         // 存储失败（如隐私模式）不影响页面内使用
       }
@@ -267,6 +274,12 @@ export const useProjectStore = defineStore("projects", () => {
 
   /** 登录后拉取服务端数据；远端为空时把本机数据（种子/离线修改）迁移上去 */
   async function init() {
+    const username = currentUser.value?.username ?? null;
+    if (loadedFor !== username) {
+      reset();
+      loadedFor = username;
+      projects.value = loadLocal();
+    }
     try {
       // 先把本机未同步的修改推上去，否则拉下来的远端数据会把它们盖掉
       await Promise.all(
@@ -288,6 +301,26 @@ export const useProjectStore = defineStore("projects", () => {
       syncState.value = "error";
       ready.value = true;
     }
+  }
+
+  /** 退出登录前调用：等未同步的修改发完 */
+  async function flushPending() {
+    await Promise.all(
+      [...pendingSaves.keys()].map((id) => {
+        clearTimeout(pendingSaves.get(id)!);
+        return flushSave(id);
+      }),
+    );
+  }
+
+  /** 切换/退出账号时清空内存数据，未发出的保存直接丢弃（仍在该用户的本地缓存里） */
+  function reset() {
+    for (const timer of pendingSaves.values()) clearTimeout(timer);
+    pendingSaves.clear();
+    loadedFor = null;
+    projects.value = [];
+    syncState.value = "idle";
+    ready.value = false;
   }
 
   window.addEventListener("pagehide", () => flushAll(true));
@@ -489,6 +522,8 @@ export const useProjectStore = defineStore("projects", () => {
     syncState,
     ready,
     init,
+    flushPending,
+    reset,
     retrySync,
     createProject,
     updateProject,
