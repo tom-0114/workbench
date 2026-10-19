@@ -1,5 +1,5 @@
 import { reactive } from "vue";
-import { pushRepo } from "./repo";
+import { pushRepo, type PushTestResult } from "./repo";
 
 /** 本设备的推送状态；unsupported 包括 iPhone 上没有从主屏幕打开的情况 */
 export type PushStatus = "unknown" | "unsupported" | "needs-install" | "server-off" | "denied" | "off" | "on";
@@ -93,12 +93,29 @@ export async function disablePush(): Promise<void> {
   }
 }
 
+function testFailureMessage(result: PushTestResult): string {
+  if (result.reason === "missing" || result.reason === "gone") return "这台设备的订阅已失效，请点“关闭”后重新开启";
+  if (result.reason === "unreachable") {
+    // Chrome 走 Google FCM，国内服务器通常连不上；Edge、Safari 走微软、苹果的推送服务
+    return result.host?.endsWith("googleapis.com")
+      ? "服务器连不上 Google 的推送服务（Chrome 靠它收通知），国内服务器一般访问不了。电脑上可改用 Edge 开启提醒。"
+      : `服务器连不上推送服务（${result.host}），请稍后重试`;
+  }
+  if (result.status === 401 || result.status === 403) return `推送服务拒绝了请求（${result.status}），请检查服务器的 VAPID 配置`;
+  return `推送服务返回错误（${result.status ?? "未知"}），请稍后重试`;
+}
+
 export async function sendTestPush(): Promise<void> {
   pushState.busy = true;
   pushState.message = "";
   try {
-    const result = await pushRepo.test();
-    pushState.message = result.sent ? "已发送，几秒内会收到" : "没有发送成功，请关闭后重新开启";
+    const sub = await currentSubscription();
+    if (!sub) {
+      pushState.status = "off";
+      return;
+    }
+    const result = await pushRepo.test(sub.endpoint);
+    pushState.message = result.ok ? "已发送，几秒内会收到" : testFailureMessage(result);
   } catch {
     pushState.message = "发送失败，请稍后重试";
   } finally {

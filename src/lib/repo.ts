@@ -41,11 +41,19 @@ export const taskRepo = {
     request<{ count: number }>("/reminders", { method: "PUT", body: JSON.stringify({ reminders }) }),
 };
 
+export interface PushTestResult {
+  ok: boolean;
+  reason?: "missing" | "gone" | "rejected" | "unreachable";
+  host?: string;
+  status?: number;
+}
+
 export const pushRepo = {
   config: () => request<{ enabled: boolean; publicKey?: string }>("/push/config"),
   subscribe: (subscription: PushSubscriptionJSON) =>
     request<void>("/push/subscribe", { method: "POST", body: JSON.stringify(subscription) }),
   unsubscribe: (endpoint: string) =>
     request<void>("/push/unsubscribe", { method: "POST", body: JSON.stringify({ endpoint }) }),
-  test: () => request<{ sent: number; total: number }>("/push/test", { method: "POST" }),
+  test: (endpoint: string) =>
+    request<PushTestResult>("/push/test", { method: "POST", body: JSON.stringify({ endpoint }) }),
 };

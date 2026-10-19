@@ -89,8 +89,9 @@ test("提醒同步与到点推送", { skip: skip || (!process.env.WORKBENCH_PUSH
     const endpoint = `https://127.0.0.1:${server.address().port}/push/${randomBytes(4).toString("hex")}`;
     assert.equal((await api("/push/subscribe", { method: "POST", body: { endpoint, keys: { p256dh: ua.getPublicKey("base64url"), auth: auth.toString("base64url") } } })).status, 204);
 
-    const test1 = await api("/push/test", { method: "POST" });
-    assert.ok(test1.data.sent >= 1);
+    const test1 = await api("/push/test", { method: "POST", body: { endpoint } });
+    assert.equal(test1.data.ok, true);
+    assert.equal((await api("/push/test", { method: "POST", body: { endpoint: `${endpoint}-other` } })).data.reason, "missing");
     assert.match(received.at(-1).headers.authorization, /^vapid t=.+, k=/);
 
     const mk = (title) => api("/tasks", { method: "POST", body: { title, dueDate: day(0), dueTime: "09:00", remindOffset: 0, priority: 0, tags: [], repeatRule: "none", completed: false } });

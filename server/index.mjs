@@ -460,19 +460,25 @@ async function saveSubscription(userId, sub) {
   );
 }
 
+/** 单条推送；失败时带上推送服务的域名，方便区分“连不上”和“被拒绝” */
+async function pushToSubscription(sub, payload) {
+  const host = new URL(sub.endpoint).host;
+  try {
+    const result = await sendPush(sub, payload, { vapid: VAPID, subject: VAPID_SUBJECT });
+    if (result.ok) return { ok: true };
+    if (result.gone) await pool.query("DELETE FROM push_subscriptions WHERE id = $1", [sub.id]);
+    console.warn(`[workbench-api] push ${sub.id} (${host}) rejected: ${result.status}`);
+    return { ok: false, host, reason: result.gone ? "gone" : "rejected", status: result.status };
+  } catch (error) {
+    console.warn(`[workbench-api] push ${sub.id} (${host}) failed:`, error.message);
+    return { ok: false, host, reason: "unreachable" };
+  }
+}
+
 async function pushToUser(userId, payload) {
   const { rows } = await pool.query("SELECT * FROM push_subscriptions WHERE user_id = $1", [userId]);
   let sent = 0;
-  for (const sub of rows) {
-    try {
-      const result = await sendPush(sub, payload, { vapid: VAPID, subject: VAPID_SUBJECT });
-      if (result.ok) sent += 1;
-      else if (result.gone) await pool.query("DELETE FROM push_subscriptions WHERE id = $1", [sub.id]);
-      else console.warn(`[workbench-api] push ${sub.id} rejected: ${result.status}`);
-    } catch (error) {
-      console.warn(`[workbench-api] push ${sub.id} failed:`, error.message);
-    }
-  }
+  for (const sub of rows) if ((await pushToSubscription(sub, payload)).ok) sent += 1;
   return { sent, total: rows.length };
 }
 
@@ -857,7 +863,11 @@ const server = createServer(async (req, res) => {
     }
     if (path === "/api/push/test" && method === "POST") {
       if (!VAPID || !VAPID_SUBJECT) return json(res, 400, { error: "服务器未配置推送" });
-      return json(res, 200, await pushToUser(uid, { title: "Workbench 提醒已开启", body: "到点时会像这样通知你", tag: "wb-test" }));
+      // 只发给当前设备：发给全部设备时，一台成功会掩盖本机失败
+      const { endpoint } = await readBody(req);
+      const { rows } = await pool.query("SELECT * FROM push_subscriptions WHERE user_id = $1 AND endpoint = $2", [uid, String(endpoint)]);
+      if (!rows.length) return json(res, 200, { ok: false, reason: "missing" });
+      return json(res, 200, await pushToSubscription(rows[0], { title: "Workbench 提醒已开启", body: "到点时会像这样通知你", tag: "wb-test" }));
     }
 
     return json(res, 404, { error: "not found" });
