@@ -210,6 +210,15 @@ async function init() {
   dummyHash = await hashPassword(randomBytes(16).toString("hex"));
   await withTransaction(async (client) => {
     await client.query(SCHEMA);
+    // 任务不再有时间：旧数据把时间折进提醒提前量（提醒基准改为当天 09:00，实际提醒时刻不变），再清空时间
+    await client.query(
+      `UPDATE tasks SET
+         remind_offset = CASE WHEN remind_offset IS NULL THEN NULL
+           ELSE remind_offset - (split_part(due_time, ':', 1)::int * 60 + split_part(due_time, ':', 2)::int - 540) END,
+         due_time = ''
+       WHERE due_time ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'`,
+    );
+    await client.query("UPDATE tasks SET due_time = '' WHERE due_time <> ''");
     const { rows } = await client.query("SELECT id FROM users WHERE is_admin ORDER BY id LIMIT 1");
     let adminId = rows[0]?.id;
     if (!adminId) {
@@ -260,10 +269,18 @@ function validIso(value) {
   return typeof value === "string" && !Number.isNaN(Date.parse(value)) ? new Date(value).toISOString() : null;
 }
 
-/** 新增字段统一在这里规整：时间只接受 HH:mm，提醒提前量 -30 天到 365 天（负数为到期后提醒），完成时间仅在已完成时保留 */
+/**
+ * 新增字段统一在这里规整：任务只有日期，dueTime 恒为空；提醒提前量以当天 09:00 为基准，-30 天到 365 天（负数为之后提醒）；
+ * 完成时间仅在已完成时保留。旧客户端或旧备份带来的时间折进提前量，保证提醒时刻不变。
+ */
 function taskExtras(input) {
-  const dueTime = TIME_RE.test(input.dueTime ?? "") && input.dueDate ? input.dueTime : "";
-  const offset = Number(input.remindOffset);
+  const legacyTime = TIME_RE.test(input.dueTime ?? "") && input.dueDate ? input.dueTime : "";
+  let offset = Number(input.remindOffset);
+  if (legacyTime) {
+    const [h, m] = legacyTime.split(":").map(Number);
+    offset -= h * 60 + m - 540;
+  }
+  const dueTime = "";
   const remindOffset =
     input.remindOffset !== null && input.remindOffset !== undefined && Number.isInteger(offset) && offset >= -30 * 1440 && offset <= 365 * 1440 && input.dueDate
       ? offset
@@ -373,6 +390,22 @@ async function setCompletion(userId, taskId, date, done) {
   } else {
     await pool.query("DELETE FROM task_completions WHERE task_id=$1 AND date=$2", [taskId, date]);
   }
+  return true;
+}
+
+/** 通知上点“完成”：普通任务标记完成，重复任务只打卡这一天 */
+async function completeOccurrence(userId, taskId, date) {
+  const { rows } = await pool.query("SELECT repeat_rule FROM tasks WHERE id=$1 AND user_id=$2 AND deleted_at IS NULL", [
+    taskId,
+    userId,
+  ]);
+  if (!rows.length) return false;
+  if (rows[0].repeat_rule !== "none") return setCompletion(userId, taskId, date, true);
+  const now = new Date().toISOString();
+  await pool.query(
+    "UPDATE tasks SET completed = true, completed_at = COALESCE(completed_at, $1), updated_at = $1 WHERE id = $2 AND user_id = $3",
+    [now, taskId, userId],
+  );
   return true;
 }
 
@@ -517,7 +550,7 @@ async function syncReminders(userId, list) {
 async function deliverDueReminders() {
   const now = new Date();
   const { rows } = await pool.query(
-    `SELECT r.*, t.title, t.repeat_rule, t.completed, t.deleted_at, t.updated_at,
+    `SELECT r.*, t.title, t.priority, t.repeat_rule, t.completed, t.deleted_at, t.updated_at,
        EXISTS (SELECT 1 FROM task_completions c WHERE c.task_id = r.task_id AND c.date = r.occ_date) AS occ_done
      FROM reminders r JOIN tasks t ON t.id = r.task_id
      WHERE r.sent_at IS NULL AND r.fire_at <= $1 AND r.fire_at > $2
@@ -533,7 +566,8 @@ async function deliverDueReminders() {
     );
     if (!claimed.rowCount) continue;
     await pushToUser(Number(r.user_id), {
-      title: r.title,
+      // 高优先级在标题前加标记，一堆通知里更显眼
+      title: Number(r.priority) === 3 ? `❗${r.title}` : r.title,
       body: r.body,
       tag: `wb-${r.task_id}-${r.occ_date}`,
       taskId: Number(r.task_id),
@@ -806,6 +840,13 @@ const server = createServer(async (req, res) => {
     }
     if (taskMatch && method === "DELETE") {
       const ok = await deleteTask(uid, Number(taskMatch[1]));
+      return ok ? json(res, 204) : json(res, 404, { error: "任务不存在" });
+    }
+    const completeMatch = path.match(/^\/api\/tasks\/(\d+)\/complete$/);
+    if (completeMatch && method === "POST") {
+      const { date } = await readBody(req);
+      if (!DATE_RE.test(date ?? "")) return json(res, 400, { error: "参数无效" });
+      const ok = await completeOccurrence(uid, Number(completeMatch[1]), date);
       return ok ? json(res, 204) : json(res, 404, { error: "任务不存在" });
     }
     const restoreMatch = path.match(/^\/api\/tasks\/(\d+)\/restore$/);

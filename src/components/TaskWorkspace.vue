@@ -22,12 +22,11 @@ import ImportDialog from './ImportDialog.vue';
 import NotificationDialog from './NotificationDialog.vue';
 import { pushState, refreshPushStatus } from '@/lib/push';
 
-const props = defineProps<{ selectedKey?: string }>();
+defineProps<{ selectedKey?: string }>();
 const emit = defineEmits<{ 'open-task': [occ: Occurrence]; logout: [] }>();
 const store = useTaskStore();
 const mobile = useMediaQuery('(max-width: 767px)');
 // 与 TaskSheet 的内嵌详情面板同一断点：详情占住右侧时收集箱侧栏先让位
-const wide = useMediaQuery('(min-width: 1100px)');
 const INBOX_KEY = 'wb.calendarInbox';
 const calendarInbox = ref(localStorage.getItem(INBOX_KEY) === '1');
 function setCalendarInbox(open: boolean) { calendarInbox.value = open; localStorage.setItem(INBOX_KEY, open ? '1' : '0'); }
@@ -199,7 +198,7 @@ async function addTask() {
 function changeAppearance(value: Appearance) {appearance.value=value;setAppearance(value);}
 function onKey(event: KeyboardEvent) {
   const target=event.target as HTMLElement|null;
-  if(target?.closest('[role="dialog"], [role="listbox"], .wb-detail-panel'))return;
+  if(target?.closest('[role="dialog"], [role="listbox"]'))return;
   if((event.ctrlKey||event.metaKey)&&event.key.toLowerCase()==='f'){event.preventDefault();void openSearch();return;}
   if(target?.closest('input,textarea,select,[contenteditable="true"]')||event.ctrlKey||event.metaKey||event.altKey)return;
   if(event.key.toLowerCase()==='n'){event.preventDefault();void focusAdd();}
@@ -269,7 +268,7 @@ onBeforeUnmount(()=>window.removeEventListener('keydown',onKey));
         <button v-if="view==='calendar'&&!mobile" type="button" class="wb-inbox-toggle" :class="{ 'is-on': calendarInbox }" :aria-pressed="calendarInbox" @click="setCalendarInbox(!calendarInbox)"><Inbox aria-hidden="true" />收集箱<span>{{ store.inboxTasks.length }}</span></button>
         <label v-if="!['calendar','trash','completed'].includes(view)" class="wb-sort"><span class="sr-only">任务排序</span><select v-model="sort" aria-label="任务排序"><option value="priority">按优先级</option><option value="date">按日期</option><option value="title">按标题</option></select><ChevronDown /></label>
       </header>
-      <MonthView v-if="view==='calendar'" class="wb-workspace-calendar" :inbox-open="calendarInbox && !(wide && !!props.selectedKey)" @open-task="emit('open-task',$event)" @close-inbox="setCalendarInbox(false)" />
+      <MonthView v-if="view==='calendar'" class="wb-workspace-calendar" :inbox-open="calendarInbox" @open-task="emit('open-task',$event)" @close-inbox="setCalendarInbox(false)" />
       <template v-else>
         <div class="wb-list-tools">
           <form v-if="!['completed','trash','search'].includes(view)" class="wb-quick-entry" :aria-busy="addBusy" @submit.prevent="addTask">

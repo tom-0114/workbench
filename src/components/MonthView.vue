@@ -19,6 +19,7 @@ import { useTaskStore } from "@/stores/tasks";
 import type { Occurrence, RepeatRule } from "@/lib/types";
 import { fmtDate } from "@/lib/date";
 import { getDayMark } from "@/lib/cn-holidays";
+import { reminderLabel, reminderTime } from "@/lib/reminders";
 import QuickAddPopover from "./QuickAddPopover.vue";
 import CalendarInbox from "./CalendarInbox.vue";
 import InboxSheet from "./InboxSheet.vue";
@@ -28,6 +29,8 @@ const emit = defineEmits<{ (e: "open-task", occ: Occurrence): void; (e: "close-i
 const store = useTaskStore();
 
 // 保持引用稳定，避免 options 重算时触发日历整体重建
+const BELL_SVG =
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg>';
 const PLUGINS = [dayGridPlugin, listPlugin, multiMonthPlugin, interactionPlugin];
 const isMobile = useMediaQuery("(max-width: 767px)");
 
@@ -256,16 +259,16 @@ const options = computed<CalendarOptions>(() => ({
     const dow = arg.date.getDay();
     return dow === 0 || dow === 6 ? ["wb-weekend"] : [];
   },
-  // 同一天内：未完成在前，已完成沉底；有时间的按时间排在前面，其次按优先级降序
+  // 同一天内：未完成在前，已完成沉底；设了提醒的按提醒时间排在前面，其次按优先级降序
   eventOrder: (a: any, b: any) => {
     const oa = (a.extendedProps ?? a).occ as Occurrence | undefined;
     const ob = (b.extendedProps ?? b).occ as Occurrence | undefined;
     const ca = oa?.completed ? 1 : 0;
     const cb = ob?.completed ? 1 : 0;
     if (ca !== cb) return ca - cb;
-    const ta = oa?.task.dueTime || "99";
-    const tb = ob?.task.dueTime || "99";
-    if (ta !== tb) return ta.localeCompare(tb);
+    const ra = oa?.task.remindOffset != null ? reminderTime(oa.date, oa.task.dueTime, oa.task.remindOffset).getTime() : Infinity;
+    const rb = ob?.task.remindOffset != null ? reminderTime(ob.date, ob.task.dueTime, ob.task.remindOffset).getTime() : Infinity;
+    if (ra !== rb) return ra < rb ? -1 : 1;
     const pa = oa?.task.priority ?? 0;
     const pb = ob?.task.priority ?? 0;
     if (pa !== pb) return pb - pa;
@@ -313,18 +316,24 @@ const options = computed<CalendarOptions>(() => ({
       content.append(doneButton);
     }
 
-    if (o.task.dueTime) {
-      const time = document.createElement("span");
-      time.className = "wb-event-time";
-      time.textContent = o.task.dueTime;
-      content.append(time);
-    }
-
     const title = document.createElement("span");
     title.className = "wb-title";
     title.title = o.task.title;
     title.textContent = o.task.title;
     content.append(title);
+
+    // 提醒时间放在标题后面，标题过长时被省略的是标题而不是提醒
+    const remind = o.completed ? "" : reminderLabel(o.task, o.date, store.currentDate);
+    if (remind) {
+      const tag = document.createElement("span");
+      tag.className = "wb-event-remind";
+      tag.title = `提醒 ${remind}`;
+      tag.setAttribute("aria-label", `提醒 ${remind}`);
+      tag.innerHTML = BELL_SVG;
+      // 手机月视图格子太窄，只留铃铛
+      if (!compactMonthGrid) tag.append(remind);
+      content.append(tag);
+    }
 
     if (o.isVirtual && !compactMonthGrid) {
       const repeat = document.createElement("span");

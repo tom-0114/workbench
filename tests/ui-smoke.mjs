@@ -17,9 +17,14 @@ const localDate = (offset=0) => { const d=new Date(); d.setDate(d.getDate()+offs
 async function waitText(page,text) { await page.getByText(text,{exact:true}).first().waitFor(); }
 async function row(page,title) { const locator=page.locator('.wb-task-list .wb-sidebar-row').filter({has:page.getByText(title,{exact:true})});await locator.waitFor();return locator; }
 async function nav(page,label) { await page.locator('.wb-main-pane h1').waitFor();if(await page.getByRole('button',{name:'打开清单导航'}).isVisible())await page.getByRole('button',{name:'打开清单导航'}).click();await page.locator('.wb-navigation .wb-nav-item').filter({has:page.getByText(label,{exact:true})}).click();await page.locator('h1').filter({hasText:label}).waitFor(); }
-// 行内点击现在是标题编辑；详情面板走“更多操作 → 详细信息”。
+// 点任务标题打开编辑弹窗；行内改标题走“更多操作 → 重命名”。
 // 弹层关闭有退场动画，定位器必须收敛到当前任务的菜单，避免撞上正在退场的旧弹层。
-async function openDetail(page,title) { const r=await row(page,title);await r.getByRole('button',{name:`更多操作：${title}`}).click();await page.getByRole('dialog',{name:`更多操作：${title}`}).getByRole('button',{name:'详细信息'}).click();await page.locator('#wb-title').waitFor();return r; }
+async function openDetail(page,title) { const r=await row(page,title);await r.locator('.wb-sidebar-title').click();await page.locator('#wb-title').waitFor();return r; }
+// 时间控件：弹层里手输后回车
+// Ant Design 日期面板：点开后按 title=YYYY-MM-DD 点日期格，不在本月就翻到下个月
+async function pickDate(page,trigger,ymd) { await trigger.click();const pop=page.locator('.ant-picker-dropdown:not(.ant-picker-dropdown-hidden)').last();await pop.waitFor();if(!await pop.locator(`td[title="${ymd}"]`).count())await pop.locator('.ant-picker-header-next-btn').click();await pop.locator(`td[title="${ymd}"]`).click(); }
+// Ant Design 时间：电脑上可直接输入 HH:mm 回车
+async function setTime(page,selector,value) { const input=page.locator(selector);await input.click();await input.fill(value);await input.press('Enter');await page.waitForFunction(([sel,v])=>document.querySelector(sel)?.value===v,[selector,value]);await page.waitForTimeout(250); }
 async function save(page) { await page.getByRole('button',{name:'保存',exact:true}).click();await page.locator('#wb-title').waitFor({state:'hidden'}); }
 async function closed(page) { const cancel=page.getByRole('button',{name:'取消',exact:true});if(await cancel.isVisible())await cancel.click();await page.locator('#wb-title').waitFor({state:'hidden'}); }
 async function taskById(id) { return (await (await fetch(`http://127.0.0.1:3002/api/tasks`)).json()).find(t=>t.id===id); }
@@ -40,8 +45,17 @@ try {
     await page.locator('#wb-notes').fill('刷新后应当保留的备注');await save(page);
     await page.reload();await openDetail(page,'验收新增任务');await page.locator('#wb-notes').waitFor();assert.equal(await page.locator('#wb-notes').inputValue(),'刷新后应当保留的备注');
   });
-  await check('unsaved detail cannot be replaced by another task',async()=>{
-    await page.locator('#wb-title').fill('修改中的标题');await openDetail(page,'和设计师确认首页修改');await waitText(page,'请先保存或取消当前修改，再切换任务。');assert.equal(await page.locator('#wb-title').inputValue(),'修改中的标题');await closed(page);
+  await check('click outside or Esc saves, cancel discards',async()=>{
+    await page.locator('#wb-title').fill('点空白保存的标题');
+    await page.mouse.click(8,8);await page.locator('#wb-title').waitFor({state:'hidden'});
+    await waitForTaskWhere(t=>t.title==='点空白保存的标题');
+    await openDetail(page,'点空白保存的标题');await page.locator('#wb-title').fill('取消后不该保存');await closed(page);
+    await row(page,'点空白保存的标题');
+    await openDetail(page,'点空白保存的标题');await page.locator('#wb-title').fill('验收新增任务');await page.keyboard.press('Escape');
+    await page.locator('#wb-title').waitFor({state:'hidden'});await row(page,'验收新增任务');
+    // 标题清空时点空白不关闭，提示先填好或取消
+    await openDetail(page,'验收新增任务');await page.locator('#wb-title').fill('');await page.mouse.click(8,8);
+    await waitText(page,'标题不能为空。填好再关闭，或点“取消”放弃修改。');await closed(page);
   });
   await check('save failure retains draft and retry persists',async()=>{
     await openDetail(page,'验收新增任务');await page.locator('#wb-title').fill('失败后重试成功的任务');await fail();await page.getByRole('button',{name:'保存',exact:true}).click();await waitText(page,'没有保存成功，请检查网络后重试。');assert.equal(await page.locator('#wb-title').inputValue(),'失败后重试成功的任务');await save(page);await page.reload();await row(page,'失败后重试成功的任务');
@@ -77,8 +91,9 @@ try {
     await heading.click();
     assert.equal(await page.locator('.wb-task-group.is-overdue .wb-task-list').isVisible(),true,'展开后列表应可见');
   });
-  await check('row click edits title inline and ignores IME enter',async()=>{
-    await nav(page,'今天');const r=await row(page,'给家里买牛奶和水果');await r.locator('.wb-sidebar-title').click();
+  await check('rename from menu edits title inline and ignores IME enter',async()=>{
+    await nav(page,'今天');const r=await row(page,'给家里买牛奶和水果');await r.getByRole('button',{name:'更多操作：给家里买牛奶和水果'}).click();
+    await page.getByRole('dialog',{name:'更多操作：给家里买牛奶和水果'}).getByRole('button',{name:'重命名'}).click();
     // 进入编辑后标题文本被输入框取代，编辑框用 aria-label 全局定位
     const editor=page.getByRole('textbox',{name:'编辑：给家里买牛奶和水果'});await editor.waitFor();await editor.fill('给家里买牛奶和鸡蛋');
     // 输入法选词中的 Enter 不应保存
@@ -110,7 +125,7 @@ try {
     const pop=page.locator('.wb-date-pop').last();
     // 默认“仅这一次”：低风险的快捷意图
     assert.equal(await pop.getByRole('radio',{name:'仅这一次'}).getAttribute('aria-checked'),'true');
-    await pop.locator('input[type="date"]').fill(localDate(3));
+    await pickDate(page,pop.locator('.wb-picker'),localDate(3));
     await r.waitFor({state:'hidden'});
     const afterOnce=await taskById(11);assert.equal(afterOnce.dueDate,localDate(0));assert.equal(afterOnce.dateOverrides[localDate(0)],localDate(3));
     await nav(page,'最近 7 天');const rows=page.locator('.wb-task-list .wb-sidebar-row').filter({has:page.getByText('写周报',{exact:true})});await rows.first().waitFor();assert.equal(await rows.count(),1);
@@ -118,7 +133,7 @@ try {
     const pop2=page.locator('.wb-date-pop').last();
     await pop2.getByRole('radio',{name:'整个系列'}).click();
     assert.equal(await pop2.getByRole('radio',{name:'整个系列'}).getAttribute('aria-checked'),'true');
-    await pop2.locator('input[type="date"]').fill(localDate(2));
+    await pickDate(page,pop2.locator('.wb-picker'),localDate(2));
     const afterSeries=await waitForTask(11,t=>t.dueDate===localDate(2));assert.deepEqual(afterSeries.dateOverrides,{});
   });
   await check('moved occurrence reflects on calendar',async()=>{
@@ -127,7 +142,7 @@ try {
     await rows.first().getByRole('button',{name:/日期：/}).click();
     const pop=page.locator('.wb-date-pop').last();
     assert.equal(await pop.getByRole('radio',{name:'仅这一次'}).getAttribute('aria-checked'),'true');
-    await pop.locator('input[type="date"]').fill(localDate(5));
+    await pickDate(page,pop.locator('.wb-picker'),localDate(5));
     await waitForTask(11,t=>t.dateOverrides&&t.dateOverrides[localDate(2)]===localDate(5));
     await nav(page,'日历');
     await page.locator('.fc-daygrid-day').first().waitFor();
@@ -263,39 +278,42 @@ try {
     await waitForTask(7,t=>t.dueDate==='');
     await panel.getByRole('button',{name:'收起收集箱'}).click();await panel.waitFor({state:'hidden'});
   });
-  await check('detail sets time and reminder, row shows time and schedule syncs',async()=>{
+  await check('detail adds a reminder with date and time, row shows it and schedule syncs',async()=>{
     await reset();await page.reload();await nav(page,'最近 7 天');await openDetail(page,'准备下周分享的提纲');
-    await page.locator('#wb-time').fill('14:30');
-    await page.getByRole('combobox',{name:'提醒'}).click();await page.getByRole('option',{name:'提前 15 分钟',exact:true}).click();
+    // 任务只有日期，没有时间控件
+    assert.equal(await page.locator('#wb-time').count(),0);
+    await page.getByRole('button',{name:'添加提醒'}).click();
+    await setTime(page,'#wb-remind-time','14:15');
     await waitText(page,'服务器还没配置推送，暂时不会发出提醒');
     await save(page);
-    await waitForTask(8,t=>t.dueTime==='14:30'&&t.remindOffset===15);
-    await (await row(page,'准备下周分享的提纲')).getByRole('button',{name:/日期：.* 14:30，点击修改/}).waitFor();
+    // 提醒以任务当天 09:00 为基准：14:15 = 提前 -315 分钟
+    await waitForTask(8,t=>t.dueTime===''&&t.remindOffset===540-855);
+    await (await row(page,'准备下周分享的提纲')).getByRole('button',{name:/日期：.*，提醒 14:15，点击修改/}).waitFor();
     let synced;for(let i=0;i<25&&!synced;i++){synced=(await (await fetch('http://127.0.0.1:3002/__test/reminders')).json()).find(r=>r.taskId===8);if(!synced)await new Promise(r=>setTimeout(r,200));}
-    assert.equal(synced?.body,'今天 14:30');assert.equal(synced.date,localDate(2));
-    // 去掉时间后提醒退回全天选项
-    await openDetail(page,'准备下周分享的提纲');await page.locator('#wb-time').fill('');
-    assert.match(await page.getByRole('combobox',{name:'提醒'}).textContent(),/当天 09:00/);await closed(page);
+    assert.match(synced?.body??'',/^今天 \d+月\d+日 周.（.+月.+）$/,'正文应带日期、星期和农历');assert.equal(synced.date,localDate(2));
+    // 日历上也能看到提醒时间
+    await nav(page,'日历');await page.locator(`.fc-daygrid-day[data-date="${localDate(2)}"] .wb-event-remind`).filter({hasText:'14:15'}).waitFor();
+    await nav(page,'最近 7 天');
   });
-  await check('custom reminder picks an exact date and minute',async()=>{
-    await openDetail(page,'准备下周分享的提纲');await page.locator('#wb-time').fill('14:30');
-    await page.getByRole('combobox',{name:'提醒'}).click();await page.getByRole('option',{name:'自定义时间…',exact:true}).click();
-    await page.getByLabel('提醒时间').fill(`${localDate(1)}T08:07`);
-    await save(page);
-    // 14:30 前一天 08:07 = 提前 30 小时 23 分
-    await waitForTask(8,t=>t.dueTime==='14:30'&&t.remindOffset===30*60+23);
+  await check('reminder on another day, then removed',async()=>{
     await openDetail(page,'准备下周分享的提纲');
-    assert.match(await page.getByRole('combobox',{name:'提醒'}).textContent(),/自定义时间/);
-    assert.equal(await page.getByLabel('提醒时间').inputValue(),`${localDate(1)}T08:07`);
-    await closed(page);
+    await pickDate(page,page.locator('#wb-remind-date'),localDate(1));await setTime(page,'#wb-remind-time','08:07');
+    await page.locator('#wb-notes').fill('## 带上投影仪\n第二行不进通知');
+    await save(page);
+    // 任务当天 09:00 往前推到前一天 08:07 = 提前 24 小时 53 分
+    await waitForTask(8,t=>t.remindOffset===24*60+53);
+    await (await row(page,'准备下周分享的提纲')).getByRole('button',{name:/提醒 明天 08:07/}).waitFor();
     let synced;for(let i=0;i<25&&!synced;i++){synced=(await (await fetch('http://127.0.0.1:3002/__test/reminders')).json()).find(r=>r.taskId===8&&r.fireAt===new Date(`${localDate(1)}T08:07`).toISOString());if(!synced)await new Promise(r=>setTimeout(r,200));}
-    assert.ok(synced,'自定义提醒时刻应同步到后端');
+    assert.ok(synced,'提醒时刻应同步到后端');
+    assert.match(synced.body,/^明天 \d+月\d+日 周.（.+）\n带上投影仪$/,'第二行是去掉 Markdown 前缀的备注首行');
+    await openDetail(page,'准备下周分享的提纲');await page.getByRole('button',{name:'取消提醒'}).click();await save(page);
+    await waitForTask(8,t=>t.remindOffset===null);
   });
-  await check('quick add parses time',async()=>{
+  await check('quick add turns a parsed time into a reminder',async()=>{
     const input=page.getByRole('textbox',{name:'添加任务',exact:true});await input.fill('后天下午3点 体检');
-    await page.locator('.wb-parse-hint').filter({hasText:'15:00'}).waitFor();
+    await page.locator('.wb-parse-hint').filter({hasText:'提醒 15:00'}).waitFor();
     await input.press('Enter');await page.locator('#wb-title').waitFor();await closed(page);
-    await waitForTaskWhere(t=>t.title==='体检'&&t.dueDate===localDate(2)&&t.dueTime==='15:00');
+    await waitForTaskWhere(t=>t.title==='体检'&&t.dueDate===localDate(2)&&t.dueTime===''&&t.remindOffset===540-900);
   });
   await check('recurring streak badge and completed view grouped by day',async()=>{
     await fetch('http://127.0.0.1:3002/api/tasks/4',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({...await taskById(4),dueDate:localDate(-5)})});
@@ -372,7 +390,7 @@ try {
     // 在「今天」视图改期到明天会让任务移出视图，先切到「最近 7 天」验证
     await nav(m,'最近 7 天');
     const r=await row(m,'手机收集箱任务');
-    await r.getByRole('button',{name:/日期：/}).click();await m.locator('.wb-date-pop').last().locator('input[type="date"]').fill(localDate(1));await r.getByRole('button',{name:'日期：明天，点击修改'}).waitFor();
+    await r.getByRole('button',{name:/日期：/}).click();await pickDate(m,m.locator('.wb-date-pop').last().locator('.wb-picker'),localDate(1));await r.getByRole('button',{name:'日期：明天，点击修改'}).waitFor();
     await r.locator('.wb-pri-btn').click();await m.locator('.wb-pri-menu').last().getByRole('button',{name:'设为高优先级'}).click();await m.locator('.wb-sidebar-row.is-pri-high').filter({has:m.getByText('手机收集箱任务',{exact:true})}).waitFor();
   });
   await check('mobile calendar inbox sheet schedules a task',async()=>{

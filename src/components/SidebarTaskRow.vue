@@ -1,22 +1,22 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
-import { Bell, CalendarArrowDown, CalendarClock, CalendarDays, Check, Flag, Flame, Inbox, Info, LoaderCircle, MoreHorizontal, Repeat2, Trash2, X } from "lucide-vue-next";
+import { Bell, CalendarArrowDown, CalendarClock, CalendarDays, Check, Flag, Flame, Inbox, LoaderCircle, MoreHorizontal, Pencil, Repeat2, Trash2, X } from "lucide-vue-next";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useTaskStore } from "@/stores/tasks";
+import { reminderLabel } from "@/lib/reminders";
+import DateField from "@/components/DateField.vue";
 import { PRIORITY_LABELS, type Occurrence, type Priority } from "@/lib/types";
 import { addDays, parseDate } from "@/lib/date";
 
 const props = withDefaults(
   defineProps<{
     occurrence: Occurrence;
-    inlineEdit?: boolean;
     canMoveToday?: boolean;
     canMoveInbox?: boolean;
     canPostpone?: boolean;
     selected?: boolean;
   }>(),
   {
-    inlineEdit: true,
     canMoveToday: false,
     canMoveInbox: false,
     canPostpone: false,
@@ -57,7 +57,11 @@ const dateLabel = computed(() => {
   const base = `${d.getMonth() + 1}月${d.getDate()}日`;
   return d.getFullYear() === parseDate(store.currentDate).getFullYear() ? base : `${d.getFullYear()}年${base}`;
 });
-const timeLabel = computed(() => (props.occurrence.date && props.occurrence.task.dueTime) || "");
+// 设了提醒的未完成任务在行上直接显示提醒时间
+const remindLabel = computed(() =>
+  props.occurrence.completed ? "" : reminderLabel(props.occurrence.task, props.occurrence.date, store.currentDate),
+);
+const pickedDate = computed({ get: () => dateDraft.value, set: (value: string) => void applyDate(value) });
 const streak = computed(() => (props.occurrence.isVirtual ? store.streaks.get(props.occurrence.task.id) ?? 0 : 0));
 const isOverdue = computed(
   () => !!props.occurrence.date && props.occurrence.date < store.currentDate && !props.occurrence.completed,
@@ -97,16 +101,16 @@ async function applyPriority(priority: Priority) {
   }
 }
 
-async function beginEdit() {
-  if (!props.inlineEdit) {
-    emit("open-task", props.occurrence);
-    return;
-  }
+/** 菜单里的“重命名”：行内改标题，不打开弹窗 */
+async function beginRename() {
   draftTitle.value = props.occurrence.task.title;
   mode.value = "edit";
   await nextTick();
-  inputEl.value?.focus();
-  inputEl.value?.select();
+  // 等菜单关闭把焦点还给触发按钮之后再聚焦输入框
+  requestAnimationFrame(() => {
+    inputEl.value?.focus();
+    inputEl.value?.select();
+  });
 }
 
 function cancelEdit() {
@@ -255,7 +259,7 @@ async function confirmDelete() {
     </div>
 
     <template v-else>
-      <button type="button" class="wb-sidebar-title" :title="occurrence.task.title" @click="beginEdit">
+      <button type="button" class="wb-sidebar-title" :title="occurrence.task.title" @click="emit('open-task', occurrence)">
         <span class="wb-row-copy"><span class="wb-task-name" :class="occurrence.completed ? 'line-through' : ''">{{ occurrence.task.title }}</span><span v-if="occurrence.task.tags.length" class="wb-row-tags"><span v-for="tag in occurrence.task.tags" :key="tag">#{{ tag }}</span></span></span>
         <span v-if="streak >= 2" class="wb-row-streak" :title="`已连续完成 ${streak} 次`" :aria-label="`已连续完成 ${streak} 次`"><Flame aria-hidden="true" />{{ streak }}</span>
         <Repeat2 v-if="occurrence.isVirtual" class="wb-repeat-mark" aria-label="重复任务" />
@@ -296,24 +300,18 @@ async function confirmDelete() {
             class="wb-row-date"
             :class="{ 'is-overdue': isOverdue, 'is-empty': !occurrence.date }"
             :disabled="occurrence.completed"
-            :aria-label="`日期：${dateLabel}${timeLabel ? ' ' + timeLabel : ''}，点击修改`"
+            :aria-label="`日期：${dateLabel}${remindLabel ? `，提醒 ${remindLabel}` : ''}，点击修改`"
             title="修改日期"
           >
             <CalendarDays aria-hidden="true" />
-            <span>{{ dateLabel }}{{ timeLabel ? ` ${timeLabel}` : "" }}</span>
-            <Bell v-if="occurrence.task.remindOffset != null && occurrence.date && !occurrence.completed" class="wb-row-bell" aria-label="已设提醒" />
+            <span>{{ dateLabel }}</span>
+            <span v-if="remindLabel" class="wb-row-remind"><Bell aria-hidden="true" />{{ remindLabel }}</span>
           </button>
         </PopoverTrigger>
         <PopoverContent class="wb-date-pop" side="bottom" align="end" :align-offset="-4">
           <label class="wb-date-pop-field">
             <span>日期</span>
-            <input
-              type="date"
-              :value="dateDraft"
-              :disabled="dateBusy"
-              :aria-label="`选择日期：${occurrence.task.title}`"
-              @change="applyDate(($event.target as HTMLInputElement).value)"
-            />
+            <DateField v-model="pickedDate" :label="`选择日期：${occurrence.task.title}`" :disabled="dateBusy" :clearable="false" :presets="false" />
           </label>
           <div
             v-if="occurrence.isVirtual"
@@ -349,14 +347,9 @@ async function confirmDelete() {
       <Popover v-model:open="actionsOpen">
         <PopoverTrigger as-child><button class="wb-control wb-task-more" :aria-label="`更多操作：${occurrence.task.title}`"><MoreHorizontal /></button></PopoverTrigger>
         <PopoverContent class="wb-task-actions-menu" side="bottom" align="end" @click="actionsOpen=false">
-        <button
-          type="button"
-          aria-label="详细信息"
-          title="打开任务详情"
-          @click="emit('open-task', props.occurrence)"
-        >
-          <Info aria-hidden="true" />
-          详细信息
+        <button type="button" aria-label="重命名" title="直接在列表里改标题" @click="beginRename">
+          <Pencil aria-hidden="true" />
+          重命名
         </button>
         <!-- 改期类操作会移动整个系列，重复任务实例不显示 -->
         <button

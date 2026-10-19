@@ -16,11 +16,24 @@ self.addEventListener("push", (event) => {
       icon: "icons/icon-192.png",
       badge: "icons/icon-192.png",
       data: { taskId: data.taskId, date: data.date },
+      // iPhone 的网页应用不显示按钮，点通知仍是打开任务
+      actions: data.taskId ? [{ action: "done", title: "完成" }] : [],
     }),
   );
 });
 
-// 点通知：已打开的窗口直接聚焦并打开任务，否则新开一个
+async function completeFromNotification(scope, taskId, date) {
+  const res = await fetch(`${scope}api/tasks/${taskId}/complete`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ date }),
+  });
+  return res.ok;
+}
+
+// 点“完成”：后台完成并通知已打开的页面刷新；失败（如登录过期）退回打开任务
+// 点通知本身：已打开的窗口直接聚焦并打开任务，否则新开一个
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   const { taskId, date } = event.notification.data || {};
@@ -28,6 +41,13 @@ self.addEventListener("notificationclick", (event) => {
   event.waitUntil(
     (async () => {
       const windows = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+      if (event.action === "done" && taskId) {
+        const ok = await completeFromNotification(scope, taskId, date).catch(() => false);
+        if (ok) {
+          for (const client of windows) client.postMessage({ type: "wb:refresh" });
+          return;
+        }
+      }
       const existing = windows.find((client) => client.url.startsWith(scope));
       if (existing) {
         await existing.focus();

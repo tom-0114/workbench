@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
-import { Flame, LoaderCircle } from "lucide-vue-next";
+import { computed } from "vue";
+import { Bell, Flame, LoaderCircle, X } from "lucide-vue-next";
 import type { Task } from "@/lib/types";
-import { PRIORITY_LABELS, REMIND_OPTIONS_ALLDAY, REMIND_OPTIONS_TIMED, REPEAT_LABELS } from "@/lib/types";
+import { PRIORITY_LABELS, REPEAT_LABELS } from "@/lib/types";
 import { useTaskStore } from "@/stores/tasks";
 import { pushState } from "@/lib/push";
 import { REMIND_OFFSET_MAX, REMIND_OFFSET_MIN, reminderBase, reminderTime } from "@/lib/reminders";
 import { fmtDate } from "@/lib/date";
+import DateField from "@/components/DateField.vue";
+import TimeField from "@/components/TimeField.vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,49 +41,39 @@ const tagsInput = defineModel<string>("tagsInput", { required: true });
 const priorityOptions: (Task["priority"])[] = [0, 1, 2, 3];
 const store = useTaskStore();
 
-// Select 的值不能为空串，用 "none" 表示不提醒，"custom" 表示自定义具体时刻
-const remindOptions = computed(() => (props.draft.dueTime ? REMIND_OPTIONS_TIMED : REMIND_OPTIONS_ALLDAY));
-const isPreset = (offset: number | null) => offset != null && remindOptions.value.some(([v]) => v === offset);
-// 自定义时刻仍存成相对任务时间的提前量，重复任务每次按同样的提前量提醒
-const customMode = ref(props.draft.remindOffset != null && !isPreset(props.draft.remindOffset));
-watch(
-  () => props.draft.id,
-  () => (customMode.value = props.draft.remindOffset != null && !isPreset(props.draft.remindOffset)),
-);
-const remindValue = computed({
-  get: () => (props.draft.remindOffset == null ? "none" : customMode.value ? "custom" : String(props.draft.remindOffset)),
-  set: (value: string) => {
-    customMode.value = value === "custom";
-    if (value === "none") props.draft.remindOffset = null;
-    else if (value !== "custom") props.draft.remindOffset = Number(value);
-    else if (props.draft.remindOffset == null) props.draft.remindOffset = 0;
-  },
-});
-// 去掉时间后，“提前 15 分钟”这类选项不再适用，退回当天 09:00；自定义时刻保持提前量不变
-watch(
-  () => props.draft.dueTime,
-  () => {
-    if (!customMode.value && props.draft.remindOffset != null && !isPreset(props.draft.remindOffset)) props.draft.remindOffset = 0;
-  },
-);
 const pad = (n: number) => String(n).padStart(2, "0");
-const customAt = computed({
-  get: () => {
-    if (!props.draft.dueDate || props.draft.remindOffset == null) return "";
-    const d = reminderTime(props.draft.dueDate, props.draft.dueTime, props.draft.remindOffset);
-    return `${fmtDate(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  },
-  set: (value: string) => {
-    if (!value || !props.draft.dueDate) return;
-    const base = reminderBase(props.draft.dueDate, props.draft.dueTime).getTime();
-    const offset = Math.round((base - new Date(value).getTime()) / 60_000);
-    props.draft.remindOffset = Math.min(REMIND_OFFSET_MAX, Math.max(REMIND_OFFSET_MIN, offset));
-  },
+// 提醒 = 日期 + 时间，存成相对任务当天 09:00 的提前量，重复任务每一次按同样的间隔提醒
+const fire = computed(() =>
+  props.draft.dueDate && props.draft.remindOffset != null
+    ? reminderTime(props.draft.dueDate, props.draft.dueTime, props.draft.remindOffset)
+    : null,
+);
+function setFire(date: string, time: string) {
+  if (!date || !time || !props.draft.dueDate) return;
+  const base = reminderBase(props.draft.dueDate, props.draft.dueTime).getTime();
+  const offset = Math.round((base - new Date(`${date}T${time}`).getTime()) / 60_000);
+  props.draft.remindOffset = Math.min(REMIND_OFFSET_MAX, Math.max(REMIND_OFFSET_MIN, offset));
+}
+const remindDate = computed({
+  get: () => (fire.value ? fmtDate(fire.value) : ""),
+  set: (value: string) => setFire(value, remindTime.value),
 });
-const customHint = computed(() => {
-  if (!customMode.value || props.draft.remindOffset == null || !props.draft.dueDate) return "";
-  const fire = reminderTime(props.draft.dueDate, props.draft.dueTime, props.draft.remindOffset);
-  if (fire.getTime() < Date.now()) return "这个时间已经过去，不会再提醒";
+const remindTime = computed({
+  get: () => (fire.value ? `${pad(fire.value.getHours())}:${pad(fire.value.getMinutes())}` : ""),
+  set: (value: string) => setFire(remindDate.value, value),
+});
+// 默认任务当天 09:00；今天已经过了 9 点就取下一个整点
+function addReminder() {
+  if (!props.draft.dueDate) return;
+  const now = new Date();
+  const nextHour = now.getHours() + 1;
+  const useNextHour = props.draft.dueDate === fmtDate(now) && now.getHours() >= 9 && nextHour <= 23;
+  setFire(props.draft.dueDate, useNextHour ? `${pad(nextHour)}:00` : "09:00");
+}
+const remindHint = computed(() => {
+  if (!props.draft.dueDate) return "先选日期，才能设置提醒";
+  if (!fire.value) return "";
+  if (fire.value.getTime() < Date.now()) return "这个时间已经过去，不会再提醒";
   return props.draft.repeatRule === "none" ? "" : "重复任务的每一次都按同样的间隔提醒";
 });
 const pushHint = computed(() => {
@@ -132,45 +124,24 @@ const repeatOptions: Task["repeatRule"][] = [
         <span v-if="stats.streak >= 2">已连续完成 {{ stats.streak }} 次 · </span>累计完成 {{ stats.total }} 次
       </p>
 
-      <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,7.5rem)] gap-3">
-        <div class="wb-form-field">
-          <Label for="wb-date">日期</Label>
-          <Input id="wb-date" v-model="draft.dueDate" type="date" class="min-w-0" />
-        </div>
-        <div class="wb-form-field">
-          <Label for="wb-time">时间</Label>
-          <Input id="wb-time" v-model="draft.dueTime" type="time" class="min-w-0" :disabled="!draft.dueDate" />
-        </div>
-        <p class="col-span-2 -mt-2 text-[13px]" style="color: var(--text-secondary)">
-          清空日期将移入收集箱；不填时间为全天
-        </p>
+      <div class="wb-form-field">
+        <Label for="wb-date">日期</Label>
+        <DateField id="wb-date" v-model="draft.dueDate" label="日期" placeholder="不设日期（放进收集箱）" />
       </div>
 
       <div class="wb-form-field">
-        <Label>提醒</Label>
-        <!-- 有无时间对应两套选项，Select 会缓存选项文字，切换时重新挂载 -->
-        <Select :key="draft.dueTime ? 'timed' : 'allday'" v-model="remindValue" :disabled="saving || removing || !draft.dueDate">
-          <SelectTrigger class="w-full" aria-label="提醒">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectItem value="none">不提醒</SelectItem>
-              <SelectItem v-for="[value, label] in remindOptions" :key="value" :value="String(value)">
-                {{ label }}
-              </SelectItem>
-              <SelectItem value="custom">自定义时间…</SelectItem>
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-        <Input
-          v-if="remindValue === 'custom'"
-          v-model="customAt"
-          type="datetime-local"
-          aria-label="提醒时间"
-          class="min-w-0"
-        />
-        <p v-if="customHint" class="text-[13px]" style="color: var(--text-secondary)">{{ customHint }}</p>
+        <Label :for="draft.remindOffset != null ? 'wb-remind-date' : undefined">提醒</Label>
+        <div v-if="draft.dueDate && draft.remindOffset != null" class="wb-remind-row">
+          <DateField id="wb-remind-date" v-model="remindDate" label="提醒日期" :clearable="false" :presets="false" />
+          <TimeField id="wb-remind-time" v-model="remindTime" label="提醒时间" />
+          <button type="button" class="wb-control" aria-label="取消提醒" title="取消提醒" @click="draft.remindOffset = null">
+            <X aria-hidden="true" />
+          </button>
+        </div>
+        <button v-else type="button" class="wb-remind-add" :disabled="!draft.dueDate" @click="addReminder">
+          <Bell aria-hidden="true" />添加提醒
+        </button>
+        <p v-if="remindHint" class="text-[13px]" style="color: var(--text-secondary)">{{ remindHint }}</p>
         <p v-if="pushHint" class="text-[13px]" style="color: var(--text-secondary)">{{ pushHint }}</p>
       </div>
 

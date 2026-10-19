@@ -180,7 +180,7 @@ export function parseQuickAdd(raw: string, base: Date = new Date()): ParsedQuick
     if (hour > 23 || minute > 59) return false;
     dueTime = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
     if (period === "今晚" && !dueDate) dueDate = fmtDate(today);
-    hints.push(dueTime);
+    hints.push(`提醒 ${dueTime}`); // 任务只有日期，解析出的时间落成提醒
   });
 
   const title = text.replace(/\s+/g, " ").trim();

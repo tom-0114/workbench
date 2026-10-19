@@ -34,7 +34,8 @@ test("登录", { skip }, async () => {
 test("时间、提醒与完成时间读写", { skip }, async () => {
   const created = await api("/tasks", { method: "POST", body: { title: "接口测试", dueDate: day(1), dueTime: "14:30", remindOffset: 15, priority: 1, tags: [], repeatRule: "none", completed: false } });
   assert.equal(created.status, 201);
-  assert.deepEqual([created.data.dueTime, created.data.remindOffset, created.data.completedAt], ["14:30", 15, null]);
+  // 任务不再有时间：旧客户端传来的 14:30 提前 15 分钟，折算成以 09:00 为基准的提前量，提醒仍在 14:15
+  assert.deepEqual([created.data.dueTime, created.data.remindOffset, created.data.completedAt], ["", 15 - (14 * 60 + 30 - 540), null]);
 
   const doneAt = new Date().toISOString();
   const updated = await api(`/tasks/${created.data.id}`, { method: "PUT", body: { ...created.data, completed: true, completedAt: doneAt, dueTime: "25:00" } });
@@ -112,6 +113,13 @@ test("提醒同步与到点推送", { skip: skip || (!process.env.WORKBENCH_PUSH
     const pushes = received.slice(before).map((r) => r.payload);
     assert.deepEqual(pushes.map((p) => p.title), ["到点提醒"]);
     assert.deepEqual([pushes[0].body, pushes[0].taskId, pushes[0].date], ["今天 09:00", due.id, due.dueDate]);
+
+    // 通知上的“完成”：普通任务标记完成，重复任务只打卡当天
+    assert.equal((await api(`/tasks/${due.id}/complete`, { method: "POST", body: { date: due.dueDate } })).status, 204);
+    const completedTask = (await api("/tasks")).data.find((t) => t.id === due.id);
+    assert.equal(completedTask.completed, true);
+    assert.ok(completedTask.completedAt);
+    assert.equal((await api("/tasks/999999999/complete", { method: "POST", body: { date: day(0) } })).status, 404);
 
     // 已发送的提醒再次同步不会重复推送
     await api("/reminders", { method: "PUT", body: { reminders: [{ taskId: due.id, date: due.dueDate, fireAt: past, body: "今天 09:00" }] } });

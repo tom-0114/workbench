@@ -19,14 +19,12 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import TaskSheetForm from "@/components/TaskSheetForm.vue";
-import { X } from "lucide-vue-next";
 
-const props = defineProps<{ occurrence: Occurrence | null; inlineDesktop?: boolean }>();
+const props = defineProps<{ occurrence: Occurrence | null }>();
 const open = defineModel<boolean>("open", { default: false });
 
 const store = useTaskStore();
 const isMobile = useMediaQuery("(max-width: 767px)");
-const isWide = useMediaQuery("(min-width: 1100px)");
 
 const draft = ref<Task | null>(null);
 const tagsInput = ref("");
@@ -34,7 +32,19 @@ const saving = ref(false);
 const removing = ref(false);
 const confirmingDelete = ref(false);
 const actionError = ref("");
-const guardedOpen = computed({get:()=>open.value,set:(value:boolean)=>{if(!saving.value&&!removing.value)open.value=value;}});
+// 点空白、Esc、右上角关闭：有改动就先保存再关；只有“取消”按钮放弃修改
+const guardedOpen = computed({
+  get: () => open.value,
+  set: (value: boolean) => {
+    if (saving.value || removing.value) return;
+    if (value || !dirty.value) {
+      open.value = value;
+      return;
+    }
+    if (draft.value?.title.trim()) void save();
+    else actionError.value = "标题不能为空。填好再关闭，或点“取消”放弃修改。";
+  },
+});
 const original = ref('');
 const dirty = computed(() => !!draft.value && JSON.stringify({task:draft.value,tags:tagsInput.value}) !== original.value);
 function canSwitch() {
@@ -104,13 +114,8 @@ async function remove() {
 </script>
 
 <template>
-  <aside v-if="inlineDesktop && isWide && open && draft" class="wb-detail-panel" aria-labelledby="wb-detail-title">
-    <header class="wb-detail-heading"><h2 id="wb-detail-title">任务详情</h2><button class="wb-control" aria-label="关闭任务详情" :disabled="saving || removing" @click="open=false"><X /></button></header>
-    <p v-if="draft.repeatRule !== 'none'" class="wb-series-notice">{{ REPEAT_LABELS[draft.repeatRule] }}重复 · 编辑将作用于整个系列</p>
-    <TaskSheetForm v-model:tags-input="tagsInput" :draft="draft" :saving="saving" :removing="removing" :confirming-delete="confirmingDelete" :action-error="actionError" @save="save" @remove="remove" @cancel="open=false" />
-  </aside>
-  <!-- 中等宽度使用对话框，手机使用底部抽屉 -->
-  <Dialog v-else-if="!isMobile" v-model:open="guardedOpen">
+  <!-- 桌面用对话框，手机用底部抽屉 -->
+  <Dialog v-if="!isMobile" v-model:open="guardedOpen">
     <DialogContent
       v-if="draft"
       class="wb-task-dialog flex max-h-[min(760px,calc(100dvh-32px))] flex-col gap-0 overflow-hidden p-0 sm:max-w-[560px]"
@@ -120,7 +125,7 @@ async function remove() {
         <DialogDescription v-if="draft.repeatRule !== 'none'">
           重复任务（{{ REPEAT_LABELS[draft.repeatRule] }}）：编辑将作用于整个系列
         </DialogDescription>
-        <DialogDescription v-else>修改标题、日期与事项细节。</DialogDescription>
+        <DialogDescription v-else>点空白处关闭会自动保存。</DialogDescription>
       </DialogHeader>
 
       <TaskSheetForm

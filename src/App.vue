@@ -1,5 +1,8 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { ConfigProvider, theme } from "ant-design-vue";
+import zhCN from "ant-design-vue/es/locale/zh_CN";
+import { isDark } from "@/lib/appearance";
 import { AlertCircle, LoaderCircle, RefreshCw, X } from "lucide-vue-next";
 import { useTaskStore } from "@/stores/tasks";
 import { getSession, login, logout } from "@/lib/auth";
@@ -11,6 +14,11 @@ import TaskWorkspace from "@/components/TaskWorkspace.vue";
 import TaskDialog from "@/components/TaskSheet.vue";
 
 const store = useTaskStore();
+// 日期、时间选择用 Ant Design Vue，主色和深浅色跟随应用
+const antdTheme = computed(() => ({
+  algorithm: isDark.value ? theme.darkAlgorithm : theme.defaultAlgorithm,
+  token: { colorPrimary: isDark.value ? "#7c9cf0" : "#3e60ca", borderRadius: 7, fontFamily: "inherit" },
+}));
 
 const taskDialogOpen = ref(false);
 const currentOcc = ref<Occurrence | null>(null);
@@ -64,6 +72,8 @@ function onWorkerMessage(event: MessageEvent) {
   if (event.data?.type === "wb:open-task" && appState.value === "ready") {
     openTaskById(Number(event.data.taskId), String(event.data.date ?? ""));
   }
+  // 通知上点了“完成”，页面数据跟着刷新
+  if (event.data?.type === "wb:refresh" && appState.value === "ready") void store.refresh();
 }
 
 async function bootstrap() {
@@ -122,51 +132,53 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <LoginPage
-    v-if="appState === 'guest'"
-    :busy="loginBusy"
-    :error="loginError"
-    @submit="handleLogin"
-  />
-
-  <main
-    v-else-if="appState === 'checking' || appState === 'loading'"
-    class="wb-state-page"
-    aria-live="polite"
-    aria-busy="true"
-  >
-    <LoaderCircle class="animate-spin" aria-hidden="true" />
-    <strong>{{ appState === "checking" ? "正在确认登录" : "正在整理工作台" }}</strong>
-    <span>{{ appState === "checking" ? "马上就好" : "任务和日历正在载入" }}</span>
-  </main>
-
-  <main v-else-if="appState === 'error'" class="wb-state-page" role="alert">
-    <span class="wb-state-icon"><AlertCircle aria-hidden="true" /></span>
-    <strong>工作台暂时没有载入</strong>
-    <span>{{ store.initError || "请检查网络后重试" }}</span>
-    <Button variant="outline" @click="bootstrap">
-      <RefreshCw data-icon="inline-start" aria-hidden="true" />
-      重新加载
-    </Button>
-  </main>
-
-  <div
-    v-else
-    class="wb-app-shell wb-todo-shell"
-  >
-    <TaskWorkspace
-      :selected-key="taskDialogOpen && currentOcc ? `${currentOcc.task.id}:${currentOcc.date}` : ''"
-      @open-task="openTask"
-      @logout="handleLogout"
+  <ConfigProvider :locale="zhCN" :theme="antdTheme">
+    <LoginPage
+      v-if="appState === 'guest'"
+      :busy="loginBusy"
+      :error="loginError"
+      @submit="handleLogin"
     />
-    <TaskDialog ref="taskEditor" v-model:open="taskDialogOpen" :occurrence="currentOcc" inline-desktop />
-
-    <div v-if="store.operationError" class="wb-operation-error" role="alert">
-      <AlertCircle aria-hidden="true" />
-      <span>{{ store.operationError }}</span>
-      <button type="button" aria-label="关闭错误提示" @click="store.clearOperationError()">
-        <X aria-hidden="true" />
-      </button>
+  
+    <main
+      v-else-if="appState === 'checking' || appState === 'loading'"
+      class="wb-state-page"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <LoaderCircle class="animate-spin" aria-hidden="true" />
+      <strong>{{ appState === "checking" ? "正在确认登录" : "正在整理工作台" }}</strong>
+      <span>{{ appState === "checking" ? "马上就好" : "任务和日历正在载入" }}</span>
+    </main>
+  
+    <main v-else-if="appState === 'error'" class="wb-state-page" role="alert">
+      <span class="wb-state-icon"><AlertCircle aria-hidden="true" /></span>
+      <strong>工作台暂时没有载入</strong>
+      <span>{{ store.initError || "请检查网络后重试" }}</span>
+      <Button variant="outline" @click="bootstrap">
+        <RefreshCw data-icon="inline-start" aria-hidden="true" />
+        重新加载
+      </Button>
+    </main>
+  
+    <div
+      v-else
+      class="wb-app-shell wb-todo-shell"
+    >
+      <TaskWorkspace
+        :selected-key="taskDialogOpen && currentOcc ? `${currentOcc.task.id}:${currentOcc.date}` : ''"
+        @open-task="openTask"
+        @logout="handleLogout"
+      />
+      <TaskDialog ref="taskEditor" v-model:open="taskDialogOpen" :occurrence="currentOcc" />
+  
+      <div v-if="store.operationError" class="wb-operation-error" role="alert">
+        <AlertCircle aria-hidden="true" />
+        <span>{{ store.operationError }}</span>
+        <button type="button" aria-label="关闭错误提示" @click="store.clearOperationError()">
+          <X aria-hidden="true" />
+        </button>
+      </div>
     </div>
-  </div>
+  </ConfigProvider>
 </template>

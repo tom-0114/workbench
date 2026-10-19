@@ -49,16 +49,3 @@ export const REPEAT_LABELS: Record<RepeatRule, string> = {
   "yearly-lunar": "每年·农历",
 };
 
-/** 提醒选项（分钟）；全天任务只提供“当天 09:00”与“前一天 09:00” */
-export const REMIND_OPTIONS_TIMED: Array<[number, string]> = [
-  [0, "准时"],
-  [5, "提前 5 分钟"],
-  [15, "提前 15 分钟"],
-  [30, "提前 30 分钟"],
-  [60, "提前 1 小时"],
-  [1440, "提前 1 天"],
-];
-export const REMIND_OPTIONS_ALLDAY: Array<[number, string]> = [
-  [0, "当天 09:00"],
-  [1440, "前一天 09:00"],
-];

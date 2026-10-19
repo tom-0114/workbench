@@ -3,7 +3,7 @@ import type { NewTask, Occurrence, Task } from "@/lib/types";
 import { taskRepo as repo } from "@/lib/repo";
 import { completionKey, expandOccurrences } from "@/lib/recurrence";
 import { addDays, nowIso, today } from "@/lib/date";
-import { buildReminderSchedule } from "@/lib/reminders";
+import { buildReminderSchedule, foldTimeIntoReminder } from "@/lib/reminders";
 import type { TaskBackup } from "@/lib/backup";
 
 let reminderTimer: ReturnType<typeof setTimeout> | undefined;
@@ -168,16 +168,18 @@ export const useTaskStore = defineStore("tasks", {
     async addTask(input: Partial<NewTask> & { title: string; dueDate: string }) {
       this.operationError = "";
       try {
-        const task = await repo.createTask({
-          notes: "",
-          dueTime: "",
-          remindOffset: null,
-          priority: 0,
-          tags: [],
-          repeatRule: "none",
-          completed: false,
-          ...input,
-        });
+        const task = await repo.createTask(
+          foldTimeIntoReminder({
+            notes: "",
+            dueTime: "",
+            remindOffset: null,
+            priority: 0,
+            tags: [],
+            repeatRule: "none",
+            completed: false,
+            ...input,
+          }),
+        );
         this.tasks.push(task);
         this.scheduleReminderSync();
         return task;
@@ -191,7 +193,7 @@ export const useTaskStore = defineStore("tasks", {
       this.operationError = "";
       try {
         const prev = this.tasks.find((t) => t.id === task.id);
-        const next = { ...task };
+        const next = foldTimeIntoReminder({ ...task });
         if (prev && prev.completed !== task.completed) next.completedAt = task.completed ? nowIso() : null;
         if (!next.dueDate) {
           next.dueTime = "";

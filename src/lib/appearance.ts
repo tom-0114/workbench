@@ -1,4 +1,9 @@
+import { ref } from "vue";
+
 export type Appearance = "system" | "light" | "dark";
+
+/** 当前是否深色，供 Ant Design 组件切换主题算法 */
+export const isDark = ref(false);
 
 const KEY = "wb.appearance";
 
@@ -18,6 +23,7 @@ export function systemPrefersDark(): boolean {
 export function applyAppearance(a: Appearance): void {
   const dark = a === "dark" || (a === "system" && systemPrefersDark());
   document.documentElement.classList.toggle("dark", dark);
+  isDark.value = dark;
 }
 
 export function setAppearance(a: Appearance): void {
