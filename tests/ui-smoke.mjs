@@ -230,6 +230,22 @@ try {
     await waitText(page,'回收站是空的');
   });
   await check('calendar remains reachable',async()=>{await nav(page,'日历');await page.locator('.fc-daygrid-day').first().waitFor();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);});
+  // 祖先元素残留 transform 会让 fixed 定位的拖拽镜像偏离光标；挤满的格子不能只剩“另外 N 个”
+  await check('calendar drag mirror follows cursor and crowded day keeps visible events',async()=>{
+    await reset();await page.reload();await nav(page,'日历');
+    const today=page.locator(`.fc-daygrid-day[data-date="${localDate(0)}"]`);
+    await today.locator('.fc-daygrid-more-link').waitFor();
+    assert.ok(await today.locator('.fc-daygrid-event-harness').evaluateAll(els=>els.filter(e=>getComputedStyle(e).visibility==='visible').length)>0,'今天的格子应至少显示一个事项');
+    const offset=new Date().getDay()===0?-1:1;
+    const src=await today.locator('.fc-daygrid-event').filter({hasText:'整理本周的项目进度'}).locator('.wb-title').boundingBox();
+    const dst=await page.locator(`.fc-daygrid-day[data-date="${localDate(offset)}"]`).boundingBox();
+    const x=dst.x+dst.width/2,y=dst.y+dst.height/2;
+    await page.mouse.move(src.x+10,src.y+src.height/2);await page.mouse.down();await page.mouse.move(x,y,{steps:12});
+    const mirror=await page.locator('.fc-event-dragging').boundingBox();
+    assert.ok(mirror&&x>=mirror.x&&x<=mirror.x+mirror.width&&y>=mirror.y&&y<=mirror.y+mirror.height,`拖拽镜像 ${JSON.stringify(mirror)} 应覆盖光标 ${x},${y}`);
+    await page.mouse.up();
+    await waitForTask(1,t=>t.dueDate===localDate(offset));
+  });
   await check('tabs switch fast with large data',async()=>{
     await reset();await big();
     await page.reload();await page.locator('.wb-main-pane h1').waitFor();

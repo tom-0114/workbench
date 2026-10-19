@@ -226,9 +226,9 @@
 .wb-task-actions-menu button.is-destructive { color:var(--destructive); }
 .wb-task-actions-menu svg { width:16px; height:16px; }
 .wb-workspace-calendar { flex:1; min-height:0; }
-.wb-main-pane { animation:wb-list-enter 320ms ease-out both; }
-.wb-task-scroll { animation:wb-list-enter 200ms ease-out both; }
-.wb-detail-panel { animation:wb-detail-enter 230ms cubic-bezier(.2,.7,.2,1) both; }
+.wb-main-pane { animation:wb-list-enter 320ms ease-out backwards; }
+.wb-task-scroll { animation:wb-list-enter 200ms ease-out backwards; }
+.wb-detail-panel { animation:wb-detail-enter 230ms cubic-bezier(.2,.7,.2,1) backwards; }
 .wb-todo-shell button:focus-visible,.wb-todo-shell select:focus-visible { outline:2px solid var(--accent-color); outline-offset:2px; }
 @keyframes wb-list-enter { from {opacity:0;transform:translateY(5px);} to {opacity:1;transform:translateY(0);} }
 @keyframes wb-detail-enter { from {opacity:0;transform:translateX(14px);} to {opacity:1;transform:translateX(0);} }
@@ -1220,6 +1220,11 @@ body.wb-task-dragging .wb-drop-zone.is-drop-active {
 .wb-event[draggable="true"]:active {
   cursor: grabbing;
 }
+/* 拖拽镜像默认透明，叠在目标格文字上会看不清 */
+.wb-calendar .fc .wb-event.fc-event-dragging {
+  background: var(--bg-primary);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+}
 .wb-calendar .fc .wb-native-drop-active.fc-daygrid-day .fc-daygrid-day-frame,
 .wb-calendar .fc .wb-native-drop-active[data-wb-drop-date] {
   background: color-mix(in srgb, var(--accent-color) 11%, var(--bg-primary));
@@ -1270,6 +1275,13 @@ body.wb-task-dragging .wb-drop-zone.is-drop-active {
   -webkit-line-clamp: 2;
   white-space: normal;
   color: var(--text-primary);
+}
+/* 桌面日历格子里多于一个事项时压成单行：FullCalendar 折叠时会让出一个事项的高度给“更多”，
+   两行高的事项会让格子只剩“另外 N 个”。手机月视图按固定条数折叠，不受影响。 */
+@media (min-width: 768px) {
+  .wb-calendar .fc .fc-daygrid-day-events:has(.fc-daygrid-event-harness ~ .fc-daygrid-event-harness) .wb-title {
+    -webkit-line-clamp: 1;
+  }
 }
 .wb-event.wb-done {
   opacity: 1;

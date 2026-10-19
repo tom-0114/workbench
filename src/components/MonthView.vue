@@ -289,6 +289,8 @@ const options = computed<CalendarOptions>(() => ({
   eventOrderStrict: true,
   // 日历事项使用 FullCalendar 自带的拖拽；收集箱事项仍由外层原生 drop 处理。
   editable: true,
+  // 任务只有单个日期，禁止拉伸成跨天事件
+  eventDurationEditable: false,
   droppable: false,
   events: events.value,
   datesSet: onDatesSet,
