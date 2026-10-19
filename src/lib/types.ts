@@ -7,10 +7,15 @@ export interface Task {
   title: string;
   notes: string;
   dueDate: string; // YYYY-MM-DD
+  /** HH:mm，空串表示全天 */
+  dueTime: string;
+  /** 提前多少分钟提醒，null 不提醒；全天任务以当天 09:00 为基准 */
+  remindOffset: number | null;
   priority: Priority;
   tags: string[];
   repeatRule: RepeatRule;
   completed: boolean; // 仅非重复任务使用
+  completedAt: string | null; // 非重复任务的完成时间；旧数据为空
   /** 重复任务的单次改期例外：锚点展开日期 -> 新日期；空串表示该次不出现 */
   dateOverrides?: Record<string, string>;
   deletedAt: string | null; // 软删除时间；非空时只在回收站显示
@@ -18,7 +23,7 @@ export interface Task {
   updatedAt: string;
 }
 
-export type NewTask = Omit<Task, "id" | "deletedAt" | "createdAt" | "updatedAt">;
+export type NewTask = Omit<Task, "id" | "deletedAt" | "createdAt" | "updatedAt" | "completedAt">;
 
 /** 日历/列表上实际渲染的一条：非重复任务本身，或重复任务在某天的实例 */
 export interface Occurrence {
@@ -43,3 +48,17 @@ export const REPEAT_LABELS: Record<RepeatRule, string> = {
   yearly: "每年",
   "yearly-lunar": "每年·农历",
 };
+
+/** 提醒选项（分钟）；全天任务只提供“当天 09:00”与“前一天 09:00” */
+export const REMIND_OPTIONS_TIMED: Array<[number, string]> = [
+  [0, "准时"],
+  [5, "提前 5 分钟"],
+  [15, "提前 15 分钟"],
+  [30, "提前 30 分钟"],
+  [60, "提前 1 小时"],
+  [1440, "提前 1 天"],
+];
+export const REMIND_OPTIONS_ALLDAY: Array<[number, string]> = [
+  [0, "当天 09:00"],
+  [1440, "前一天 09:00"],
+];

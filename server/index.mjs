@@ -1,13 +1,15 @@
 // 个人工作台后端：PostgreSQL REST API。
 // 数据语义见 src/lib/types.ts：
-//   Task: { id, title, notes, dueDate, priority, tags, repeatRule, completed, deletedAt, createdAt, updatedAt }
+//   Task: { id, title, notes, dueDate, dueTime, remindOffset, priority, tags, repeatRule, completed, completedAt, ... }
 //   completions: "taskId:date" 集合（重复任务按天打卡）
-// 多用户：tasks 按 user_id 隔离，task_completions 经 tasks 间接隔离；仅管理员可创建账号。
+//   reminders: 前端按重复规则算好的未来提醒时间，后端到点核对任务现状后推送
+// 多用户：tasks / reminders / push_subscriptions 按 user_id 隔离，task_completions 经 tasks 间接隔离；仅管理员可创建账号。
 // Web API 使用签名 HttpOnly Cookie 鉴权，表结构在启动时自动创建/迁移。
 import { Pool } from "pg";
 import { createServer } from "node:http";
 import { createHash, createHmac, randomBytes, scrypt, timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
+import { loadVapidKeys, sendPush } from "./webpush.mjs";
 
 const PORT = Number(process.env.PORT || 3002);
 // 仅在 users 表为空时用来初始化首个管理员；之后以数据库为准
@@ -26,6 +28,14 @@ const LOGIN_MAX_ATTEMPTS = 5;
 const USERNAME_RE = /^[a-z0-9][a-z0-9_.-]{1,31}$/;
 const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 128;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const REPEAT_RULES = new Set(["none", "daily", "weekly", "monthly", "yearly", "yearly-lunar"]);
+const VAPID = loadVapidKeys(process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "";
+const REMINDER_TICK_MS = 30_000;
+// 进程重启或短暂卡顿时补发的窗口；更早的提醒视为过期不再打扰
+const REMINDER_GRACE_MS = 15 * 60 * 1000;
 
 if (!AUTH_SECRET || AUTH_SECRET.length < 32) {
   throw new Error("至少 32 字符的 AUTH_SECRET 必须配置");
@@ -69,6 +79,28 @@ CREATE TABLE IF NOT EXISTS task_completions (
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS deleted_at TEXT;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS user_id BIGINT;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS date_overrides JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_time TEXT NOT NULL DEFAULT '';
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS remind_offset INTEGER;
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completed_at TEXT;
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id         BIGSERIAL PRIMARY KEY,
+  user_id    BIGINT NOT NULL,
+  endpoint   TEXT NOT NULL UNIQUE,
+  p256dh     TEXT NOT NULL,
+  auth       TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS reminders (
+  user_id   BIGINT NOT NULL,
+  task_id   BIGINT NOT NULL,
+  occ_date  TEXT NOT NULL,
+  fire_at   TEXT NOT NULL,
+  body      TEXT NOT NULL DEFAULT '',
+  synced_at TEXT NOT NULL,
+  sent_at   TEXT,
+  PRIMARY KEY (task_id, occ_date, fire_at)
+);
+CREATE INDEX IF NOT EXISTS reminders_pending_idx ON reminders (fire_at) WHERE sent_at IS NULL;
 `;
 
 // 单用户时代的旧数据（user_id 为空）回填后再加约束
@@ -153,6 +185,8 @@ async function deleteUser(userId) {
       [userId],
     );
     await client.query("DELETE FROM tasks WHERE user_id = $1", [userId]);
+    await client.query("DELETE FROM reminders WHERE user_id = $1", [userId]);
+    await client.query("DELETE FROM push_subscriptions WHERE user_id = $1", [userId]);
     await client.query("DELETE FROM users WHERE id = $1", [userId]);
   });
 }
@@ -203,10 +237,13 @@ function rowToTask(r) {
     title: r.title,
     notes: r.notes,
     dueDate: r.due_date,
+    dueTime: r.due_time ?? "",
+    remindOffset: r.remind_offset ?? null,
     priority: r.priority,
     tags: r.tags ?? [],
     repeatRule: r.repeat_rule,
     completed: !!r.completed,
+    completedAt: r.completed_at ?? null,
     dateOverrides: r.date_overrides ?? {},
     deletedAt: r.deleted_at ?? null,
     createdAt: r.created_at,
@@ -219,20 +256,41 @@ async function listTasks(userId) {
   return rows.map(rowToTask);
 }
 
+function validIso(value) {
+  return typeof value === "string" && !Number.isNaN(Date.parse(value)) ? new Date(value).toISOString() : null;
+}
+
+/** 新增字段统一在这里规整：时间只接受 HH:mm，提醒提前量 0-7 天，完成时间仅在已完成时保留 */
+function taskExtras(input) {
+  const dueTime = TIME_RE.test(input.dueTime ?? "") && input.dueDate ? input.dueTime : "";
+  const offset = Number(input.remindOffset);
+  const remindOffset =
+    input.remindOffset !== null && input.remindOffset !== undefined && Number.isInteger(offset) && offset >= 0 && offset <= 7 * 24 * 60 && input.dueDate
+      ? offset
+      : null;
+  const completedAt = input.completed ? validIso(input.completedAt) : null;
+  return { dueTime, remindOffset, completedAt };
+}
+
 async function createTask(userId, input) {
   const now = new Date().toISOString();
+  const extras = taskExtras(input);
   const { rows } = await pool.query(
-    `INSERT INTO tasks (user_id, title, notes, due_date, priority, tags, repeat_rule, completed, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10) RETURNING *`,
+    `INSERT INTO tasks (user_id, title, notes, due_date, due_time, remind_offset, priority, tags, repeat_rule,
+       completed, completed_at, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12, $13) RETURNING *`,
     [
       userId,
       input.title,
       input.notes ?? "",
       input.dueDate,
+      extras.dueTime,
+      extras.remindOffset,
       input.priority ?? 0,
       JSON.stringify(input.tags ?? []),
       input.repeatRule ?? "none",
       !!input.completed,
+      extras.completedAt,
       now,
       now,
     ],
@@ -240,26 +298,31 @@ async function createTask(userId, input) {
   return rowToTask(rows[0]);
 }
 
-/** 以下写操作都带 user_id 条件，返回是否命中，未命中按 404 处理 */
+/** 以下写操作都带 user_id 条件，未命中按 404 处理；更新返回最新行，前端用它对齐 updatedAt */
 async function updateTask(userId, task) {
-  const { rowCount } = await pool.query(
-    `UPDATE tasks SET title=$1, notes=$2, due_date=$3, priority=$4, tags=$5::jsonb,
-       repeat_rule=$6, completed=$7, date_overrides=$8::jsonb, updated_at=$9 WHERE id=$10 AND user_id=$11`,
+  const extras = taskExtras(task);
+  const { rows } = await pool.query(
+    `UPDATE tasks SET title=$1, notes=$2, due_date=$3, due_time=$4, remind_offset=$5, priority=$6, tags=$7::jsonb,
+       repeat_rule=$8, completed=$9, completed_at=$10, date_overrides=$11::jsonb, updated_at=$12
+     WHERE id=$13 AND user_id=$14 RETURNING *`,
     [
       task.title,
       task.notes ?? "",
       task.dueDate,
+      extras.dueTime,
+      extras.remindOffset,
       task.priority ?? 0,
       JSON.stringify(task.tags ?? []),
       task.repeatRule ?? "none",
       !!task.completed,
+      extras.completedAt,
       JSON.stringify(task.dateOverrides ?? {}),
       new Date().toISOString(),
       task.id,
       userId,
     ],
   );
-  return rowCount > 0;
+  return rows[0] ? rowToTask(rows[0]) : null;
 }
 
 async function deleteTask(userId, id) {
@@ -282,7 +345,10 @@ async function restoreTask(userId, id) {
 async function permanentlyDeleteTask(userId, id) {
   return withTransaction(async (client) => {
     const { rowCount } = await client.query("DELETE FROM tasks WHERE id=$1 AND user_id=$2", [id, userId]);
-    if (rowCount > 0) await client.query("DELETE FROM task_completions WHERE task_id=$1", [id]);
+    if (rowCount > 0) {
+      await client.query("DELETE FROM task_completions WHERE task_id=$1", [id]);
+      await client.query("DELETE FROM reminders WHERE task_id=$1", [id]);
+    }
     return rowCount > 0;
   });
 }
@@ -308,6 +374,185 @@ async function setCompletion(userId, taskId, date, done) {
     await pool.query("DELETE FROM task_completions WHERE task_id=$1 AND date=$2", [taskId, date]);
   }
   return true;
+}
+
+/* ---------- 备份恢复 ---------- */
+
+const IMPORT_MAX_TASKS = 20_000;
+const IMPORT_MAX_COMPLETIONS = 200_000;
+
+/** 校验备份并整理成可写入的结构；不合法返回错误文案 */
+function parseBackup(body) {
+  if (body?.app !== "workbench" || body.version !== 1) return { error: "不是 Workbench 的备份文件" };
+  if (!Array.isArray(body.tasks) || !Array.isArray(body.completions)) return { error: "备份文件内容不完整" };
+  if (body.tasks.length > IMPORT_MAX_TASKS || body.completions.length > IMPORT_MAX_COMPLETIONS) {
+    return { error: "备份文件过大" };
+  }
+  const tasks = [];
+  for (const t of body.tasks) {
+    if (!Number.isInteger(t?.id) || typeof t.title !== "string" || !t.title.trim()) return { error: "备份里有无效的任务" };
+    if (t.dueDate && !DATE_RE.test(t.dueDate)) return { error: `任务「${t.title}」的日期无效` };
+    const now = new Date().toISOString();
+    tasks.push({
+      ...t,
+      dueDate: t.dueDate || "",
+      notes: typeof t.notes === "string" ? t.notes : "",
+      priority: [0, 1, 2, 3].includes(t.priority) ? t.priority : 0,
+      tags: Array.isArray(t.tags) ? t.tags.filter((tag) => typeof tag === "string") : [],
+      repeatRule: REPEAT_RULES.has(t.repeatRule) && t.dueDate ? t.repeatRule : "none",
+      dateOverrides: t.dateOverrides && typeof t.dateOverrides === "object" ? t.dateOverrides : {},
+      deletedAt: t.deletedAt ? validIso(t.deletedAt) : null,
+      createdAt: validIso(t.createdAt) ?? now,
+      updatedAt: validIso(t.updatedAt) ?? now,
+    });
+  }
+  const completions = [];
+  for (const key of body.completions) {
+    const [id, date] = String(key).split(":");
+    if (Number.isInteger(Number(id)) && DATE_RE.test(date ?? "")) completions.push([Number(id), date]);
+  }
+  return { tasks, completions };
+}
+
+/** 覆盖式恢复：清空该账号现有任务后按备份重建。任务 id 全局自增，按新 id 重映射打卡记录 */
+async function importBackup(userId, { tasks, completions }) {
+  return withTransaction(async (client) => {
+    await client.query(
+      "DELETE FROM task_completions WHERE task_id IN (SELECT id FROM tasks WHERE user_id = $1)",
+      [userId],
+    );
+    await client.query("DELETE FROM reminders WHERE user_id = $1", [userId]);
+    await client.query("DELETE FROM tasks WHERE user_id = $1", [userId]);
+    const idMap = new Map();
+    for (const t of tasks) {
+      const extras = taskExtras(t);
+      const { rows } = await client.query(
+        `INSERT INTO tasks (user_id, title, notes, due_date, due_time, remind_offset, priority, tags, repeat_rule,
+           completed, completed_at, date_overrides, deleted_at, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12::jsonb, $13, $14, $15) RETURNING id`,
+        [
+          userId, t.title, t.notes, t.dueDate, extras.dueTime, extras.remindOffset, t.priority,
+          JSON.stringify(t.tags), t.repeatRule, !!t.completed, extras.completedAt,
+          JSON.stringify(t.dateOverrides), t.deletedAt, t.createdAt, t.updatedAt,
+        ],
+      );
+      idMap.set(t.id, rows[0].id);
+    }
+    const mapped = completions.filter(([id]) => idMap.has(id));
+    if (mapped.length) {
+      await client.query(
+        `INSERT INTO task_completions (task_id, date) SELECT * FROM unnest($1::bigint[], $2::text[])
+         ON CONFLICT DO NOTHING`,
+        [mapped.map(([id]) => idMap.get(id)), mapped.map(([, date]) => date)],
+      );
+    }
+    return { tasks: tasks.length, completions: mapped.length };
+  });
+}
+
+/* ---------- 推送与提醒 ---------- */
+
+async function saveSubscription(userId, sub) {
+  await pool.query(
+    `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, created_at) VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (endpoint) DO UPDATE SET user_id = $1, p256dh = $3, auth = $4`,
+    [userId, sub.endpoint, sub.p256dh, sub.auth, new Date().toISOString()],
+  );
+}
+
+async function pushToUser(userId, payload) {
+  const { rows } = await pool.query("SELECT * FROM push_subscriptions WHERE user_id = $1", [userId]);
+  let sent = 0;
+  for (const sub of rows) {
+    try {
+      const result = await sendPush(sub, payload, { vapid: VAPID, subject: VAPID_SUBJECT });
+      if (result.ok) sent += 1;
+      else if (result.gone) await pool.query("DELETE FROM push_subscriptions WHERE id = $1", [sub.id]);
+      else console.warn(`[workbench-api] push ${sub.id} rejected: ${result.status}`);
+    } catch (error) {
+      console.warn(`[workbench-api] push ${sub.id} failed:`, error.message);
+    }
+  }
+  return { sent, total: rows.length };
+}
+
+/** 覆盖该账号所有未发送的提醒；已发送且时间未变的保留发送标记，避免重复推送 */
+async function syncReminders(userId, list) {
+  const now = new Date().toISOString();
+  const valid = [];
+  for (const r of list) {
+    const fireAt = validIso(r?.fireAt);
+    if (Number.isInteger(r?.taskId) && DATE_RE.test(r.date ?? "") && fireAt) {
+      valid.push([r.taskId, r.date, fireAt, typeof r.body === "string" ? r.body.slice(0, 200) : ""]);
+    }
+  }
+  await withTransaction(async (client) => {
+    await client.query("DELETE FROM reminders WHERE user_id = $1 AND (sent_at IS NULL OR fire_at < $2)", [
+      userId,
+      new Date(Date.now() - 3 * 86400_000).toISOString(),
+    ]);
+    if (!valid.length) return;
+    await client.query(
+      `INSERT INTO reminders (user_id, task_id, occ_date, fire_at, body, synced_at)
+       SELECT $1, r.task_id, r.occ_date, r.fire_at, r.body, $2
+       FROM unnest($3::bigint[], $4::text[], $5::text[], $6::text[]) AS r(task_id, occ_date, fire_at, body)
+       JOIN tasks t ON t.id = r.task_id AND t.user_id = $1
+       ON CONFLICT (task_id, occ_date, fire_at) DO UPDATE SET body = EXCLUDED.body, synced_at = EXCLUDED.synced_at`,
+      [userId, now, valid.map((r) => r[0]), valid.map((r) => r[1]), valid.map((r) => r[2]), valid.map((r) => r[3])],
+    );
+  });
+  return valid.length;
+}
+
+/**
+ * 到点的提醒在发送前再核对一次：任务已删、已完成，或任务在上次同步之后被改过（别的设备改的，
+ * 本条可能已过时）都跳过。跳过的不标记已发送，等下一次同步覆盖。
+ */
+async function deliverDueReminders() {
+  const now = new Date();
+  const { rows } = await pool.query(
+    `SELECT r.*, t.title, t.repeat_rule, t.completed, t.deleted_at, t.updated_at,
+       EXISTS (SELECT 1 FROM task_completions c WHERE c.task_id = r.task_id AND c.date = r.occ_date) AS occ_done
+     FROM reminders r JOIN tasks t ON t.id = r.task_id
+     WHERE r.sent_at IS NULL AND r.fire_at <= $1 AND r.fire_at > $2
+     ORDER BY r.fire_at`,
+    [now.toISOString(), new Date(now.getTime() - REMINDER_GRACE_MS).toISOString()],
+  );
+  for (const r of rows) {
+    const done = r.repeat_rule === "none" ? r.completed : r.occ_done;
+    if (r.deleted_at || done || r.synced_at < r.updated_at) continue;
+    const claimed = await pool.query(
+      "UPDATE reminders SET sent_at = $1 WHERE task_id = $2 AND occ_date = $3 AND fire_at = $4 AND sent_at IS NULL",
+      [now.toISOString(), r.task_id, r.occ_date, r.fire_at],
+    );
+    if (!claimed.rowCount) continue;
+    await pushToUser(Number(r.user_id), {
+      title: r.title,
+      body: r.body,
+      tag: `wb-${r.task_id}-${r.occ_date}`,
+      taskId: Number(r.task_id),
+      date: r.occ_date,
+    });
+  }
+}
+
+function startReminderLoop() {
+  if (!VAPID || !VAPID_SUBJECT) {
+    console.log("[workbench-api] VAPID_* 未配置，提醒推送未启用");
+    return;
+  }
+  let running = false;
+  setInterval(async () => {
+    if (running) return;
+    running = true;
+    try {
+      await deliverDueReminders();
+    } catch (error) {
+      console.error("[workbench-api] reminder tick failed:", error);
+    } finally {
+      running = false;
+    }
+  }, REMINDER_TICK_MS);
 }
 
 /* ---------- HTTP 工具 ---------- */
@@ -550,8 +795,8 @@ const server = createServer(async (req, res) => {
     }
     const taskMatch = path.match(/^\/api\/tasks\/(\d+)$/);
     if (taskMatch && method === "PUT") {
-      const ok = await updateTask(uid, { ...(await readBody(req)), id: Number(taskMatch[1]) });
-      return ok ? json(res, 204) : json(res, 404, { error: "任务不存在" });
+      const saved = await updateTask(uid, { ...(await readBody(req)), id: Number(taskMatch[1]) });
+      return saved ? json(res, 200, saved) : json(res, 404, { error: "任务不存在" });
     }
     if (taskMatch && method === "DELETE") {
       const ok = await deleteTask(uid, Number(taskMatch[1]));
@@ -577,6 +822,44 @@ const server = createServer(async (req, res) => {
       return ok ? json(res, 204) : json(res, 404, { error: "任务不存在" });
     }
 
+    if (path === "/api/import" && method === "POST") {
+      const parsed = parseBackup(await readBody(req));
+      if (parsed.error) return json(res, 400, { error: parsed.error });
+      return json(res, 200, await importBackup(uid, parsed));
+    }
+
+    if (path === "/api/reminders" && method === "PUT") {
+      const { reminders } = await readBody(req);
+      if (!Array.isArray(reminders) || reminders.length > 5000) return json(res, 400, { error: "参数无效" });
+      return json(res, 200, { count: await syncReminders(uid, reminders) });
+    }
+    if (path === "/api/push/config" && method === "GET") {
+      return json(res, 200, VAPID && VAPID_SUBJECT ? { enabled: true, publicKey: VAPID.publicKey } : { enabled: false });
+    }
+    if (path === "/api/push/subscribe" && method === "POST") {
+      const { endpoint, keys } = await readBody(req);
+      let url;
+      try {
+        url = new URL(endpoint);
+      } catch {
+        url = null;
+      }
+      if (url?.protocol !== "https:" || typeof keys?.p256dh !== "string" || typeof keys?.auth !== "string") {
+        return json(res, 400, { error: "订阅信息无效" });
+      }
+      await saveSubscription(uid, { endpoint, p256dh: keys.p256dh, auth: keys.auth });
+      return json(res, 204);
+    }
+    if (path === "/api/push/unsubscribe" && method === "POST") {
+      const { endpoint } = await readBody(req);
+      await pool.query("DELETE FROM push_subscriptions WHERE endpoint = $1 AND user_id = $2", [String(endpoint), uid]);
+      return json(res, 204);
+    }
+    if (path === "/api/push/test" && method === "POST") {
+      if (!VAPID || !VAPID_SUBJECT) return json(res, 400, { error: "服务器未配置推送" });
+      return json(res, 200, await pushToUser(uid, { title: "Workbench 提醒已开启", body: "到点时会像这样通知你", tag: "wb-test" }));
+    }
+
     return json(res, 404, { error: "not found" });
   } catch (error) {
     console.error(`[workbench-api] ${method} ${path} failed:`, error);
@@ -589,6 +872,7 @@ init()
     server.listen(PORT, "127.0.0.1", () => {
       console.log(`[workbench-api] listening on 127.0.0.1:${PORT}`);
     });
+    startReminderLoop();
   })
   .catch((error) => {
     console.error("[workbench-api] init failed:", error);

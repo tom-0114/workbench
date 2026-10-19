@@ -1,4 +1,6 @@
 import type { NewTask, Task } from "./types";
+import type { TaskBackup } from "./backup";
+import type { ReminderEntry } from "./reminders";
 
 /** REST API 见 server/index.mjs；BASE_URL 由 vite 注入，部署在 /workbench/ 子路径时为 "/workbench/" */
 const BASE = `${import.meta.env.BASE_URL}api`;
@@ -22,8 +24,9 @@ export const taskRepo = {
   listTasks: () => request<Task[]>("/tasks"),
   createTask: (input: NewTask) =>
     request<Task>("/tasks", { method: "POST", body: JSON.stringify(input) }),
+  /** 新后端返回更新后的任务；旧版本返回 204，此时为 undefined */
   updateTask: (task: Task) =>
-    request<void>(`/tasks/${task.id}`, { method: "PUT", body: JSON.stringify(task) }),
+    request<Task | undefined>(`/tasks/${task.id}`, { method: "PUT", body: JSON.stringify(task) }),
   deleteTask: (id: number) => request<void>(`/tasks/${id}`, { method: "DELETE" }),
   restoreTask: (id: number) => request<void>(`/tasks/${id}/restore`, { method: "POST" }),
   permanentlyDeleteTask: (id: number) =>
@@ -32,4 +35,17 @@ export const taskRepo = {
   listCompletions: async () => new Set(await request<string[]>("/completions")),
   setCompletion: (taskId: number, date: string, done: boolean) =>
     request<void>("/completions", { method: "POST", body: JSON.stringify({ taskId, date, done }) }),
+  importBackup: (backup: TaskBackup) =>
+    request<{ tasks: number; completions: number }>("/import", { method: "POST", body: JSON.stringify(backup) }),
+  syncReminders: (reminders: ReminderEntry[]) =>
+    request<{ count: number }>("/reminders", { method: "PUT", body: JSON.stringify({ reminders }) }),
+};
+
+export const pushRepo = {
+  config: () => request<{ enabled: boolean; publicKey?: string }>("/push/config"),
+  subscribe: (subscription: PushSubscriptionJSON) =>
+    request<void>("/push/subscribe", { method: "POST", body: JSON.stringify(subscription) }),
+  unsubscribe: (endpoint: string) =>
+    request<void>("/push/unsubscribe", { method: "POST", body: JSON.stringify({ endpoint }) }),
+  test: () => request<{ sent: number; total: number }>("/push/test", { method: "POST" }),
 };

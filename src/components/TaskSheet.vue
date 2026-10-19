@@ -48,7 +48,8 @@ watch(
   () => [props.occurrence, open.value] as const,
   () => {
     if (open.value && props.occurrence) {
-      draft.value = { ...props.occurrence.task, tags: [...props.occurrence.task.tags] };
+      const task = props.occurrence.task;
+      draft.value = { ...task, dueTime: task.dueTime ?? "", remindOffset: task.remindOffset ?? null, tags: [...task.tags] };
       tagsInput.value = props.occurrence.task.tags.join(", ");
       original.value = JSON.stringify({task:draft.value,tags:tagsInput.value});
       saving.value = false;

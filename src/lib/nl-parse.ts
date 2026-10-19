@@ -8,6 +8,8 @@ export interface ParsedQuickAdd {
   dueDate?: string;
   /** 解析出的重复规则，未命中则不设置 */
   repeatRule?: RepeatRule;
+  /** 解析出的时间（HH:mm）；只给时间没给日期时由调用方决定落在哪天 */
+  dueTime?: string;
   /** 命中的关键词，用于输入时的实时预览（如 "明天 · 每天"） */
   hint: string;
 }
@@ -60,12 +62,14 @@ function nextYearMonthDay(today: Date, month: number, day: number): Date | undef
  * Todoist 式自然语言快速添加（中文）：
  * - 日期：今天/明天/后天/大后天、周X/下周X/星期X、周末/下周末、X月X日/号、X号
  * - 重复：每天(每日)/每周(X)/每月/每年
+ * - 时间：15:30、下午3点、晚上8点半、9点15；「今晚」同时表示今天
  * 关键词从标题中剥离；未命中任何关键词时原样返回。
  */
 export function parseQuickAdd(raw: string, base: Date = new Date()): ParsedQuickAdd {
   let text = ` ${raw.trim()} `;
   let dueDate: string | undefined;
   let repeatRule: RepeatRule | undefined;
+  let dueTime: string | undefined;
   const hints: string[] = [];
 
   const consume = (re: RegExp, apply: (m: RegExpMatchArray) => boolean | void): void => {
@@ -164,6 +168,21 @@ export function parseQuickAdd(raw: string, base: Date = new Date()): ParsedQuick
     hints.push(`${d.getMonth() + 1}月${day}日`);
   });
 
+  // 时间：需要“点/时”或冒号，避免把标题里的普通数字当成时间
+  consume(/(上午|早上|中午|下午|傍晚|晚上|今晚)?\s*(\d{1,2})(?:[:：](\d{2})|[点时](半|\d{1,2}分?)?)/, (m) => {
+    let hour = Number(m[2]);
+    const minute = m[3] ? Number(m[3]) : m[4] === "半" ? 30 : m[4] ? Number(m[4].replace("分", "")) : 0;
+    const period = m[1];
+    if (period && ["下午", "傍晚", "晚上", "今晚"].includes(period) && hour < 12) hour += 12;
+    if (period === "中午" && hour < 11) hour += 12;
+    // 不写上下午时，1-6 点按下午理解，没人会把待办排在凌晨三点
+    if (!period && hour >= 1 && hour <= 6) hour += 12;
+    if (hour > 23 || minute > 59) return false;
+    dueTime = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+    if (period === "今晚" && !dueDate) dueDate = fmtDate(today);
+    hints.push(dueTime);
+  });
+
   const title = text.replace(/\s+/g, " ").trim();
-  return { title: title || raw.trim(), dueDate, repeatRule, hint: hints.join(" · ") };
+  return { title: title || raw.trim(), dueDate, repeatRule, dueTime, hint: hints.join(" · ") };
 }

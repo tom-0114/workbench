@@ -210,6 +210,11 @@
 .wb-detail-heading { display:flex; align-items:center; justify-content:space-between; min-height:70px; padding:0 20px 0 24px; border-bottom:1px solid var(--border); }
 .wb-detail-heading h2 { font-size:14px; font-weight:550; }
 .wb-series-notice { padding:15px 24px 0; color:var(--text-secondary); font-size:13px; line-height:1.7; }
+.wb-task-stats { display:flex; align-items:center; gap:6px; margin:0; padding:8px 12px; border-radius:7px; background:color-mix(in srgb,#ff9500 10%,var(--bg-primary)); color:var(--text-secondary); font-size:13px; }
+.wb-task-stats svg { width:15px; height:15px; color:#ff9500; flex:none; }
+.wb-row-streak { display:inline-flex; align-items:center; gap:2px; flex:none; color:#e8870e; font-size:12px; font-variant-numeric:tabular-nums; }
+.wb-row-streak svg { width:13px; height:13px; }
+.wb-row-date svg.wb-row-bell { width:12px; height:12px; margin-left:-1px; }
 .wb-form-field { display:flex; flex-direction:column; gap:7px; }
 .wb-detail-panel #wb-title { font-size:16px; height:auto; padding:10px 12px; }
 .wb-detail-panel textarea { min-height:140px; line-height:1.7; }
@@ -218,6 +223,7 @@
 .wb-settings-popover select { border:1px solid var(--border); border-radius:6px; padding:8px; background:var(--bg-primary); color:var(--text-primary); }
 .wb-settings-popover>button { display:flex; align-items:center; gap:10px; min-height:36px; padding:6px; border-radius:5px; text-align:left; }
 .wb-settings-popover>button:hover { background:var(--hover); }
+.wb-settings-status { margin-left:auto; color:var(--text-tertiary); font-size:12px; }
 .wb-settings-popover svg { width:16px; height:16px; }
 .wb-settings-popover p { font-size:13px; line-height:1.7; color:var(--text-secondary); border-top:1px solid var(--border); padding-top:12px; }
 .wb-task-actions-menu { width:180px; padding:6px; display:flex; flex-direction:column; gap:2px; }
@@ -1220,9 +1226,10 @@ body.wb-task-dragging .wb-drop-zone.is-drop-active {
 .wb-event[draggable="true"]:active {
   cursor: grabbing;
 }
-/* 拖拽镜像默认透明，叠在目标格文字上会看不清 */
-.wb-calendar .fc .wb-event.fc-event-dragging {
+/* 拖拽镜像挂在 body 下（见 MonthView fixedMirrorParent），默认透明，叠在目标格文字上会看不清 */
+.wb-event.fc-event-dragging {
   background: var(--bg-primary);
+  border: 1px solid var(--border-subtle);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
 }
 .wb-calendar .fc .wb-native-drop-active.fc-daygrid-day .fc-daygrid-day-frame,
@@ -1794,3 +1801,16 @@ body.wb-task-dragging .wb-drop-zone.is-drop-active {
 .wb-input::placeholder {
   color: var(--text-tertiary);
 }
+
+/* 导入备份 */
+.wb-import-summary { display:flex; flex-direction:column; gap:6px; padding:12px 14px; border:1px solid var(--border-subtle); border-radius:8px; font-size:13px; color:var(--text-secondary); }
+.wb-import-summary p { margin:0; }
+.wb-import-warning { display:flex; gap:6px; align-items:flex-start; margin-top:4px!important; color:var(--text-primary); }
+.wb-import-warning svg { width:15px; height:15px; flex:none; margin-top:2px; color:#ff9500; }
+.wb-import-export { display:inline-flex; align-items:center; gap:6px; align-self:flex-start; padding:4px 0; color:var(--accent-color); font-size:13px; }
+.wb-import-export svg { width:14px; height:14px; }
+.wb-notify-state { display:flex; align-items:center; gap:8px; padding:10px 12px; border-radius:8px; background:var(--bg-secondary); color:var(--text-secondary); font-size:14px; }
+.wb-notify-state svg { width:18px; height:18px; }
+.wb-notify-state[data-status="on"] { color:var(--accent-color); background:color-mix(in srgb,var(--accent-color) 9%,var(--bg-primary)); }
+.wb-event .wb-event-time { flex:none; color:var(--text-secondary); font-size:12px; font-variant-numeric:tabular-nums; }
+.wb-calendar .fc .fc-multimonth .wb-event .wb-event-time { display:none; }

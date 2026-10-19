@@ -167,7 +167,7 @@ async function onCalendarDrop(event: DragEvent) {
 
 async function onQuickCreate(
   title: string,
-  applied?: { dueDate?: string; repeatRule?: RepeatRule },
+  applied?: { dueDate?: string; repeatRule?: RepeatRule; dueTime?: string },
 ) {
   if (!quickAdd.value || quickAdding.value) return;
   quickAdding.value = true;
@@ -175,6 +175,7 @@ async function onQuickCreate(
     await store.addTask({
       title,
       dueDate: applied?.dueDate ?? quickAdd.value.date,
+      dueTime: applied?.dueTime ?? "",
       repeatRule: applied?.repeatRule ?? "none",
     });
     quickAdd.value = null;
@@ -274,13 +275,16 @@ const options = computed<CalendarOptions>(() => ({
     const dow = arg.date.getDay();
     return dow === 0 || dow === 6 ? ["wb-weekend"] : [];
   },
-  // 同一天内：未完成在前，已完成沉底；其次按优先级降序
+  // 同一天内：未完成在前，已完成沉底；有时间的按时间排在前面，其次按优先级降序
   eventOrder: (a: any, b: any) => {
     const oa = (a.extendedProps ?? a).occ as Occurrence | undefined;
     const ob = (b.extendedProps ?? b).occ as Occurrence | undefined;
     const ca = oa?.completed ? 1 : 0;
     const cb = ob?.completed ? 1 : 0;
     if (ca !== cb) return ca - cb;
+    const ta = oa?.task.dueTime || "99";
+    const tb = ob?.task.dueTime || "99";
+    if (ta !== tb) return ta.localeCompare(tb);
     const pa = oa?.task.priority ?? 0;
     const pb = ob?.task.priority ?? 0;
     if (pa !== pb) return pb - pa;
@@ -291,6 +295,8 @@ const options = computed<CalendarOptions>(() => ({
   editable: true,
   // 任务只有单个日期，禁止拉伸成跨天事件
   eventDurationEditable: false,
+  // 拖拽镜像是 fixed 定位，挂在日历内时会被祖先的 transform（视图入场动画）带偏
+  fixedMirrorParent: document.body,
   droppable: false,
   events: events.value,
   datesSet: onDatesSet,
@@ -321,6 +327,13 @@ const options = computed<CalendarOptions>(() => ({
         setTimeout(() => doneButton.classList.remove("wb-pop"), 300);
       });
       content.append(doneButton);
+    }
+
+    if (o.task.dueTime) {
+      const time = document.createElement("span");
+      time.className = "wb-event-time";
+      time.textContent = o.task.dueTime;
+      content.append(time);
     }
 
     const title = document.createElement("span");

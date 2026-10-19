@@ -7,7 +7,7 @@ const props = withDefaults(defineProps<{ date: string; x: number; y: number; bus
   busy: false,
 });
 const emit = defineEmits<{
-  (e: "create", title: string, applied?: { dueDate?: string; repeatRule?: RepeatRule }): void;
+  (e: "create", title: string, applied?: { dueDate?: string; repeatRule?: RepeatRule; dueTime?: string }): void;
   (e: "close"): void;
 }>();
 
@@ -27,7 +27,7 @@ const dateLabel = computed(() => {
 
 /** 自然语言解析（明天/周五/每天…），实时预览 */
 const parsed = computed(() => parseQuickAdd(title.value));
-const hasApplied = computed(() => !!(parsed.value.dueDate || parsed.value.repeatRule));
+const hasApplied = computed(() => !!(parsed.value.dueDate || parsed.value.repeatRule || parsed.value.dueTime));
 
 /** 弹层位置：桌面跟随点击；移动端贴底（避让底部导航与安全区），像迷你抽屉 */
 const style = computed(() => {
@@ -55,7 +55,7 @@ function submit() {
     "create",
     t,
     hasApplied.value
-      ? { dueDate: parsed.value.dueDate, repeatRule: parsed.value.repeatRule }
+      ? { dueDate: parsed.value.dueDate, repeatRule: parsed.value.repeatRule, dueTime: parsed.value.dueTime }
       : undefined,
   );
 }

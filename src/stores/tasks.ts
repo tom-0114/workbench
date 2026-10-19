@@ -2,7 +2,13 @@ import { defineStore } from "pinia";
 import type { NewTask, Occurrence, Task } from "@/lib/types";
 import { taskRepo as repo } from "@/lib/repo";
 import { completionKey, expandOccurrences } from "@/lib/recurrence";
-import { today } from "@/lib/date";
+import { addDays, nowIso, today } from "@/lib/date";
+import { buildReminderSchedule } from "@/lib/reminders";
+import type { TaskBackup } from "@/lib/backup";
+
+let reminderTimer: ReturnType<typeof setTimeout> | undefined;
+let lastReminderCount = 0;
+let hiddenAt = 0;
 
 export const useTaskStore = defineStore("tasks", {
   state: () => ({
@@ -43,6 +49,28 @@ export const useTaskStore = defineStore("tasks", {
         .filter((t) => !t.deletedAt && !t.dueDate && !t.completed)
         .sort((a, b) => a.id - b.id);
     },
+    /**
+     * 重复任务的连续完成次数：从最近一次实例往回数。今天的还没打卡不算断，
+     * 一直数到第一个没完成的实例为止。
+     */
+    streaks(state): Map<number, number> {
+      const result = new Map<number, number>();
+      const d = state.currentDate;
+      const recurring = state.tasks.filter((t) => !t.deletedAt && t.repeatRule !== "none" && t.dueDate && t.dueDate <= d);
+      for (const task of recurring) {
+        const from = task.dueDate > addDays(d, -730) ? task.dueDate : addDays(d, -730);
+        const occ = expandOccurrences([task], state.completions, from, d);
+        let i = occ.length - 1;
+        if (i >= 0 && occ[i].date === d && !occ[i].completed) i -= 1;
+        let n = 0;
+        while (i >= 0 && occ[i].completed) {
+          n += 1;
+          i -= 1;
+        }
+        if (n) result.set(task.id, n);
+      }
+      return result;
+    },
     /** 回收站：最近删除的排在最前 */
     recycleBinTasks(state): Task[] {
       return state.tasks
@@ -59,6 +87,7 @@ export const useTaskStore = defineStore("tasks", {
         this.tasks = await repo.listTasks();
         this.completions = await repo.listCompletions();
         this.ready = true;
+        this.scheduleReminderSync(0);
         return true;
       } catch (e) {
         this.initError = String(e);
@@ -82,7 +111,38 @@ export const useTaskStore = defineStore("tasks", {
 
     refreshDate() {
       const d = today();
-      if (d !== this.currentDate) this.currentDate = d;
+      if (d !== this.currentDate) {
+        this.currentDate = d;
+        this.scheduleReminderSync(0);
+      }
+    },
+
+    /** 静默重新拉取：别的设备改过数据时，回到页面能看到最新状态，也避免用旧数据覆盖提醒排程 */
+    async refresh() {
+      if (!this.ready) return;
+      try {
+        const [tasks, completions] = await Promise.all([repo.listTasks(), repo.listCompletions()]);
+        this.tasks = tasks;
+        this.completions = completions;
+        this.scheduleReminderSync(0);
+      } catch {
+        // 网络抖动时保留现有数据，下次切回页面再试。
+      }
+    },
+
+    /** 任何改动后把未来的提醒重新交给后端；连续操作合并成一次 */
+    scheduleReminderSync(delay = 1500) {
+      clearTimeout(reminderTimer);
+      reminderTimer = setTimeout(async () => {
+        const list = buildReminderSchedule(this.tasks, this.completions);
+        if (!list.length && !lastReminderCount) return;
+        try {
+          await repo.syncReminders(list);
+          lastReminderCount = list.length;
+        } catch {
+          // 同步失败只影响推送，不打扰用户；下次改动或切回页面会重试。
+        }
+      }, delay);
     },
 
     /** 每分钟检查一次日期滚动；窗口重新可见时立即刷新（应对系统睡眠期间定时器不走） */
@@ -92,7 +152,12 @@ export const useTaskStore = defineStore("tasks", {
       setInterval(() => this.refreshDate(), 60_000);
       window.addEventListener("focus", () => this.refreshDate());
       document.addEventListener("visibilitychange", () => {
-        if (!document.hidden) this.refreshDate();
+        if (document.hidden) {
+          hiddenAt = Date.now();
+          return;
+        }
+        this.refreshDate();
+        if (hiddenAt && Date.now() - hiddenAt > 60_000) void this.refresh();
       });
     },
 
@@ -105,6 +170,8 @@ export const useTaskStore = defineStore("tasks", {
       try {
         const task = await repo.createTask({
           notes: "",
+          dueTime: "",
+          remindOffset: null,
           priority: 0,
           tags: [],
           repeatRule: "none",
@@ -112,6 +179,7 @@ export const useTaskStore = defineStore("tasks", {
           ...input,
         });
         this.tasks.push(task);
+        this.scheduleReminderSync();
         return task;
       } catch (error) {
         this.operationError = "新建失败，请检查网络后重试";
@@ -122,9 +190,17 @@ export const useTaskStore = defineStore("tasks", {
     async updateTask(task: Task) {
       this.operationError = "";
       try {
-        await repo.updateTask(task);
+        const prev = this.tasks.find((t) => t.id === task.id);
+        const next = { ...task };
+        if (prev && prev.completed !== task.completed) next.completedAt = task.completed ? nowIso() : null;
+        if (!next.dueDate) {
+          next.dueTime = "";
+          next.remindOffset = null;
+        }
+        const saved = await repo.updateTask(next);
         const i = this.tasks.findIndex((t) => t.id === task.id);
-        if (i >= 0) this.tasks[i] = { ...task };
+        if (i >= 0) this.tasks[i] = saved?.id === next.id ? saved : next;
+        this.scheduleReminderSync();
       } catch (error) {
         this.operationError = "保存失败，请检查网络后重试";
         throw error;
@@ -139,6 +215,7 @@ export const useTaskStore = defineStore("tasks", {
         if (index >= 0) {
           const deletedAt = new Date().toISOString();
           this.tasks[index] = { ...this.tasks[index], deletedAt, updatedAt: deletedAt };
+          this.scheduleReminderSync();
         }
       } catch (error) {
         this.operationError = "删除失败，请检查网络后重试";
@@ -201,6 +278,7 @@ export const useTaskStore = defineStore("tasks", {
           if (done) next.add(key);
           else next.delete(key);
           this.completions = next;
+          this.scheduleReminderSync();
         } else {
           await this.updateTask({ ...occ.task, completed: !occ.task.completed });
         }
@@ -216,10 +294,20 @@ export const useTaskStore = defineStore("tasks", {
         await repo.restoreTask(id);
         const index = this.tasks.findIndex((task) => task.id === id);
         if (index >= 0) this.tasks[index] = { ...this.tasks[index], deletedAt: null };
+        this.scheduleReminderSync();
       } catch (error) {
         this.operationError = "恢复失败，请检查网络后重试";
         throw error;
       }
+    },
+
+    /** 覆盖式恢复备份；成功后整体重新载入，id 已由后端重新分配 */
+    async importBackup(backup: TaskBackup) {
+      const result = await repo.importBackup(backup);
+      this.tasks = await repo.listTasks();
+      this.completions = await repo.listCompletions();
+      this.scheduleReminderSync(0);
+      return result;
     },
 
     async permanentlyDeleteTask(id: number) {
@@ -227,6 +315,7 @@ export const useTaskStore = defineStore("tasks", {
       try {
         await repo.permanentlyDeleteTask(id);
         this.tasks = this.tasks.filter((task) => task.id !== id);
+        this.scheduleReminderSync();
         this.completions = new Set([...this.completions].filter((key) => !key.startsWith(`${id}:`)));
       } catch (error) {
         this.operationError = "永久删除失败，请检查网络后重试";

@@ -3,6 +3,7 @@ import { onBeforeUnmount, onMounted, ref } from "vue";
 import { AlertCircle, LoaderCircle, RefreshCw, X } from "lucide-vue-next";
 import { useTaskStore } from "@/stores/tasks";
 import { getSession, login, logout } from "@/lib/auth";
+import { detachPushOnLogout } from "@/lib/push";
 import type { Occurrence } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import LoginPage from "@/components/LoginPage.vue";
@@ -33,6 +34,36 @@ async function loadWorkspace() {
   // 初始化请求若收到 401，会由全局事件先切回登录页；不要再被通用错误页覆盖。
   if (authRevision !== revision) return;
   appState.value = ready ? "ready" : "error";
+  if (ready) openTaskFromUrl();
+}
+
+/** 点提醒通知打开：?task=<id>&date=<YYYY-MM-DD>，打开后从地址栏去掉 */
+function openTaskById(taskId: number, date: string) {
+  const task = store.tasks.find((t) => t.id === taskId && !t.deletedAt);
+  if (!task) return;
+  const occDate = date || task.dueDate;
+  openTask(
+    task.repeatRule === "none"
+      ? { task, date: task.dueDate, completed: task.completed, isVirtual: false }
+      : { task, date: occDate, completed: store.completions.has(`${task.id}:${occDate}`), isVirtual: true },
+  );
+}
+
+function openTaskFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const id = Number(params.get("task"));
+  if (!id) return;
+  openTaskById(id, params.get("date") ?? "");
+  params.delete("task");
+  params.delete("date");
+  const query = params.toString();
+  history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+}
+
+function onWorkerMessage(event: MessageEvent) {
+  if (event.data?.type === "wb:open-task" && appState.value === "ready") {
+    openTaskById(Number(event.data.taskId), String(event.data.date ?? ""));
+  }
 }
 
 async function bootstrap() {
@@ -62,6 +93,7 @@ async function handleLogin(credentials: { username: string; password: string }) 
 
 async function handleLogout() {
   try {
+    await detachPushOnLogout();
     await logout();
   } finally {
     store.resetData();
@@ -80,9 +112,13 @@ function onAuthRequired() {
 
 onMounted(() => {
   window.addEventListener("wb:auth-required", onAuthRequired);
+  navigator.serviceWorker?.addEventListener("message", onWorkerMessage);
   bootstrap();
 });
-onBeforeUnmount(() => window.removeEventListener("wb:auth-required", onAuthRequired));
+onBeforeUnmount(() => {
+  window.removeEventListener("wb:auth-required", onAuthRequired);
+  navigator.serviceWorker?.removeEventListener("message", onWorkerMessage);
+});
 </script>
 
 <template>

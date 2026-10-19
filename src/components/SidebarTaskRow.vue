@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
-import { CalendarArrowDown, CalendarClock, CalendarDays, Check, Flag, Inbox, Info, LoaderCircle, MoreHorizontal, Repeat2, Trash2, X } from "lucide-vue-next";
+import { Bell, CalendarArrowDown, CalendarClock, CalendarDays, Check, Flag, Flame, Inbox, Info, LoaderCircle, MoreHorizontal, Repeat2, Trash2, X } from "lucide-vue-next";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useTaskStore } from "@/stores/tasks";
 import { PRIORITY_LABELS, type Occurrence, type Priority } from "@/lib/types";
@@ -60,6 +60,8 @@ const dateLabel = computed(() => {
   const base = `${d.getMonth() + 1}月${d.getDate()}日`;
   return d.getFullYear() === parseDate(store.currentDate).getFullYear() ? base : `${d.getFullYear()}年${base}`;
 });
+const timeLabel = computed(() => (props.occurrence.date && props.occurrence.task.dueTime) || "");
+const streak = computed(() => (props.occurrence.isVirtual ? store.streaks.get(props.occurrence.task.id) ?? 0 : 0));
 const isOverdue = computed(
   () => !!props.occurrence.date && props.occurrence.date < store.currentDate && !props.occurrence.completed,
 );
@@ -281,6 +283,7 @@ async function confirmDelete() {
     <template v-else>
       <button type="button" class="wb-sidebar-title" :title="occurrence.task.title" @click="beginEdit">
         <span class="wb-row-copy"><span class="wb-task-name" :class="occurrence.completed ? 'line-through' : ''">{{ occurrence.task.title }}</span><span v-if="occurrence.task.tags.length" class="wb-row-tags"><span v-for="tag in occurrence.task.tags" :key="tag">#{{ tag }}</span></span></span>
+        <span v-if="streak >= 2" class="wb-row-streak" :title="`已连续完成 ${streak} 次`" :aria-label="`已连续完成 ${streak} 次`"><Flame aria-hidden="true" />{{ streak }}</span>
         <Repeat2 v-if="occurrence.isVirtual" class="wb-repeat-mark" aria-label="重复任务" />
       </button>
 
@@ -319,11 +322,12 @@ async function confirmDelete() {
             class="wb-row-date"
             :class="{ 'is-overdue': isOverdue, 'is-empty': !occurrence.date }"
             :disabled="occurrence.completed"
-            :aria-label="`日期：${dateLabel}，点击修改`"
+            :aria-label="`日期：${dateLabel}${timeLabel ? ' ' + timeLabel : ''}，点击修改`"
             title="修改日期"
           >
             <CalendarDays aria-hidden="true" />
-            <span>{{ dateLabel }}</span>
+            <span>{{ dateLabel }}{{ timeLabel ? ` ${timeLabel}` : "" }}</span>
+            <Bell v-if="occurrence.task.remindOffset != null && occurrence.date && !occurrence.completed" class="wb-row-bell" aria-label="已设提醒" />
           </button>
         </PopoverTrigger>
         <PopoverContent class="wb-date-pop" side="bottom" align="end" :align-offset="-4">

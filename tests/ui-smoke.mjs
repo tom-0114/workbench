@@ -178,7 +178,7 @@ try {
   });
   await check('detail edits repeat rule for the series',async()=>{
     await nav(page,'最近 7 天');await openDetail(page,'写周报');
-    await page.locator('[data-slot="select-trigger"]').nth(1).click();
+    await page.getByRole('combobox',{name:'重复'}).click();
     await page.getByRole('option',{name:'每月',exact:true}).click();
     await save(page);
     await waitForTask(11,t=>t.repeatRule==='monthly');
@@ -245,6 +245,61 @@ try {
     assert.ok(mirror&&x>=mirror.x&&x<=mirror.x+mirror.width&&y>=mirror.y&&y<=mirror.y+mirror.height,`拖拽镜像 ${JSON.stringify(mirror)} 应覆盖光标 ${x},${y}`);
     await page.mouse.up();
     await waitForTask(1,t=>t.dueDate===localDate(offset));
+  });
+  await check('detail sets time and reminder, row shows time and schedule syncs',async()=>{
+    await reset();await page.reload();await nav(page,'最近 7 天');await openDetail(page,'准备下周分享的提纲');
+    await page.locator('#wb-time').fill('14:30');
+    await page.getByRole('combobox',{name:'提醒'}).click();await page.getByRole('option',{name:'提前 15 分钟',exact:true}).click();
+    await waitText(page,'服务器还没配置推送，暂时不会发出提醒');
+    await save(page);
+    await waitForTask(8,t=>t.dueTime==='14:30'&&t.remindOffset===15);
+    await (await row(page,'准备下周分享的提纲')).getByRole('button',{name:/日期：.* 14:30，点击修改/}).waitFor();
+    let synced;for(let i=0;i<25&&!synced;i++){synced=(await (await fetch('http://127.0.0.1:3002/__test/reminders')).json()).find(r=>r.taskId===8);if(!synced)await new Promise(r=>setTimeout(r,200));}
+    assert.equal(synced?.body,'今天 14:30');assert.equal(synced.date,localDate(2));
+    // 去掉时间后提醒退回全天选项
+    await openDetail(page,'准备下周分享的提纲');await page.locator('#wb-time').fill('');
+    assert.match(await page.getByRole('combobox',{name:'提醒'}).textContent(),/当天 09:00/);await closed(page);
+  });
+  await check('quick add parses time',async()=>{
+    const input=page.getByRole('textbox',{name:'添加任务',exact:true});await input.fill('后天下午3点 体检');
+    await page.locator('.wb-parse-hint').filter({hasText:'15:00'}).waitFor();
+    await input.press('Enter');await page.locator('#wb-title').waitFor();await closed(page);
+    await waitForTaskWhere(t=>t.title==='体检'&&t.dueDate===localDate(2)&&t.dueTime==='15:00');
+  });
+  await check('recurring streak badge and completed view grouped by day',async()=>{
+    await fetch('http://127.0.0.1:3002/api/tasks/4',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({...await taskById(4),dueDate:localDate(-5)})});
+    for(const d of [-1,-2,-3])await fetch('http://127.0.0.1:3002/api/completions',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({taskId:4,date:localDate(d),done:true})});
+    await page.reload();await nav(page,'今天');
+    await (await row(page,'下班后跑步 30 分钟')).getByLabel('已连续完成 3 次').waitFor();
+    await openDetail(page,'下班后跑步 30 分钟');await page.locator('.wb-task-stats').filter({hasText:'已连续完成 3 次 · 累计完成 3 次'}).waitFor();await closed(page);
+    const r=await row(page,'给家里买牛奶和水果');await r.getByRole('checkbox').click();await r.getByRole('checkbox',{checked:true}).waitFor();
+    await waitForTask(5,t=>t.completed&&!!t.completedAt);
+    await nav(page,'已完成');
+    const todayGroup=page.locator('.wb-task-group').filter({has:page.locator('h2',{hasText:/^今天$/})});
+    await todayGroup.getByText('给家里买牛奶和水果',{exact:true}).waitFor();
+    await page.locator('.wb-task-group').filter({has:page.locator('h2',{hasText:/^昨天$/})}).getByText('下班后跑步 30 分钟',{exact:true}).waitFor();
+  });
+  await check('import backup validates file and replaces data',async()=>{
+    const openImport=async()=>{await page.getByRole('button',{name:'设置'}).click();await page.getByRole('button',{name:'导入备份'}).click();await page.getByRole('dialog',{name:'导入备份'}).waitFor();};
+    await openImport();
+    await page.getByLabel('选择备份文件').setInputFiles({name:'bad.json',mimeType:'application/json',buffer:Buffer.from('{"app":"other"}')});
+    await waitText(page,'这不是 Workbench 导出的备份文件');
+    const backup={app:'workbench',version:1,exportedAt:new Date().toISOString(),tasks:[{id:1,title:'从备份恢复的任务',notes:'',dueDate:localDate(0),dueTime:'',remindOffset:null,priority:2,tags:['恢复'],repeatRule:'none',completed:false,completedAt:null,deletedAt:null,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()}],completions:[]};
+    await page.getByLabel('选择备份文件').setInputFiles({name:'backup.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(backup))});
+    await waitText(page,'1 个任务、0 条打卡');
+    await page.getByRole('button',{name:'替换并恢复'}).click();await waitText(page,'已恢复 1 个任务、0 条打卡记录');
+    await page.getByRole('button',{name:'完成',exact:true}).click();
+    await nav(page,'今天');await row(page,'从备份恢复的任务');
+    assert.equal(await page.getByText('和设计师确认首页修改',{exact:true}).count(),0);
+  });
+  await check('notification settings and PWA assets',async()=>{
+    await page.getByRole('button',{name:'设置'}).click();await page.getByRole('button',{name:/提醒通知/}).click();
+    await waitText(page,'服务器还没配置推送密钥（VAPID），暂时无法开启。');await page.keyboard.press('Escape');
+    const manifest=await (await fetch(`${base}/manifest.webmanifest`)).json();
+    assert.equal(manifest.display,'standalone');
+    for(const icon of manifest.icons)assert.equal((await fetch(`${base}/${icon.src}`)).status,200);
+    assert.match(await (await fetch(`${base}/sw.js`)).text(),/addEventListener\("push"/);
+    assert.ok(await page.evaluate(async()=>!!(await navigator.serviceWorker.getRegistration())),'Service Worker 应已注册');
   });
   await check('tabs switch fast with large data',async()=>{
     await reset();await big();

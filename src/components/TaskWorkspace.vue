@@ -2,10 +2,10 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useMediaQuery } from '@vueuse/core';
 import { Solar } from 'lunar-typescript';
-import { CalendarDays, CalendarRange, Check, CheckCheck, ChevronDown, ChevronRight, Download, Inbox, ListTodo, LogOut, Menu, Plus, Search, Settings2, Sun, Tag, Trash2, UserCog, X } from 'lucide-vue-next';
+import { Bell, CalendarDays, CalendarRange, Check, CheckCheck, ChevronDown, ChevronRight, Download, Inbox, ListTodo, LogOut, Menu, Plus, Search, Settings2, Sun, Tag, Trash2, Upload, UserCog, X } from 'lucide-vue-next';
 import { useTaskStore } from '@/stores/tasks';
 import { currentUser } from '@/lib/auth';
-import { addDays, parseDate } from '@/lib/date';
+import { addDays, fmtDate, parseDate } from '@/lib/date';
 import { parseQuickAdd } from '@/lib/nl-parse';
 import { searchTasks } from '@/lib/search';
 import { expandOccurrences } from '@/lib/recurrence';
@@ -18,6 +18,9 @@ import SidebarTaskRow from './SidebarTaskRow.vue';
 import RecycleTaskRow from './RecycleTaskRow.vue';
 import MonthView from './MonthView.vue';
 import AccountDialog from './AccountDialog.vue';
+import ImportDialog from './ImportDialog.vue';
+import NotificationDialog from './NotificationDialog.vue';
+import { pushState, refreshPushStatus } from '@/lib/push';
 
 defineProps<{ selectedKey?: string }>();
 const emit = defineEmits<{ 'open-task': [occ: Occurrence]; logout: [] }>();
@@ -29,6 +32,9 @@ const view = ref<View>(['today','upcoming','all','inbox','completed','calendar',
 const activeTag = ref('');
 const navOpen = ref(false);
 const accountOpen = ref(false);
+const importOpen = ref(false);
+const notifyOpen = ref(false);
+const pushStatusLabel = computed(() => ({ on: '已开启', off: '未开启', denied: '已拦截', 'needs-install': '需添加到主屏幕', 'server-off': '未配置', unsupported: '不支持' } as Record<string, string>)[pushState.status] ?? '');
 const settingsOpen = ref(false);
 const query = ref('');
 const titleInput = ref('');
@@ -74,8 +80,14 @@ const completed = computed(() => {
       if (done.has(date)) result.push({ task, date, completed: true, isVirtual: true });
     }
   }
-  return result.sort((a, b) => b.date.localeCompare(a.date));
+  return result.sort((a, b) => doneKey(b).localeCompare(doneKey(a)));
 });
+// 完成时间排序键：普通任务用完成时刻，旧数据没有完成时刻就退回截止日；重复任务用打卡那天
+function doneKey(o: Occurrence): string {
+  if (o.isVirtual || !o.task.completedAt) return `${o.date || o.task.updatedAt.slice(0, 10)}T99`;
+  const d = new Date(o.task.completedAt);
+  return `${fmtDate(d)}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
 const tags = computed(() => [...new Set(store.activeTasks.flatMap(t => t.tags))].sort((a,b) => a.localeCompare(b,'zh-CN')));
 const navItems = computed(() => [
   { id: 'inbox' as View, label: '收集箱', icon: Inbox, count: store.inboxTasks.length },
@@ -102,13 +114,22 @@ const occurrences = computed(() => {
   }
   return all.value;
 });
-const pending = computed(() => occurrences.value.filter(o=>!o.completed).sort((a,b) => sort.value==='title' ? a.task.title.localeCompare(b.task.title,'zh-CN') : sort.value==='date' ? a.date.localeCompare(b.date)||a.task.id-b.task.id : b.task.priority-a.task.priority||a.task.id-b.task.id));
-const done = computed(() => occurrences.value.filter(o=>o.completed));
+const pending = computed(() => occurrences.value.filter(o=>!o.completed).sort((a,b) => sort.value==='title' ? a.task.title.localeCompare(b.task.title,'zh-CN') : sort.value==='date' ? a.date.localeCompare(b.date)||(a.task.dueTime||'99').localeCompare(b.task.dueTime||'99')||a.task.id-b.task.id : b.task.priority-a.task.priority||a.task.id-b.task.id));
+const done = computed(() => view.value==='completed' ? [] : occurrences.value.filter(o=>o.completed));
 const groups = computed(() => {
   if(view.value==='today') return [
     {key:'overdue',label:'逾期',items:store.overdueTasks.map(toOcc)},
     {key:'today',label:'今天',items:pending.value},
   ].filter(g=>g.items.length);
+  if(view.value==='completed') {
+    const byDay = new Map<string, Occurrence[]>();
+    for (const o of completed.value) {
+      const day = doneKey(o).slice(0, 10);
+      const list = byDay.get(day);
+      if (list) list.push(o); else byDay.set(day, [o]);
+    }
+    return [...byDay].map(([day, items]) => ({ key: day, label: day===addDays(store.currentDate,-1) ? '昨天' : formatDate(day), items }));
+  }
   if(view.value==='upcoming') {
     const dates = [...new Set(pending.value.map(o=>o.date))].sort();
     return dates.map(date=>({key:date,label:formatDate(date),items:pending.value.filter(o=>o.date===date)}));
@@ -120,9 +141,22 @@ const progress = computed(() => store.todayOccurrences.length ? Math.round(store
 const RENDER_STEP = 400;
 const renderLimit = ref(150);
 function limitItems<T>(items: T[]): T[] { return items.length > renderLimit.value ? items.slice(0, renderLimit.value) : items; }
+// 上限按所有分组合计：已完成页按天分组时可能有上千个小组，逐组限制等于没限制
+const visibleGroups = computed(() => {
+  let left = renderLimit.value;
+  const out: Array<{ key: string; label: string; items: Occurrence[]; total: number }> = [];
+  for (const g of groups.value) {
+    if (left <= 0) break;
+    const items = g.items.length > left ? g.items.slice(0, left) : g.items;
+    out.push({ ...g, items, total: g.items.length });
+    left -= items.length;
+  }
+  return out;
+});
 const moreCount = computed(() => {
-  const rendered = groups.value.reduce((n,group) => n + limitItems(group.items).length, 0) + limitItems(done.value).length;
-  return pending.value.length + done.value.length - rendered;
+  const total = groups.value.reduce((n,group) => n + group.items.length, 0) + done.value.length;
+  const rendered = visibleGroups.value.reduce((n,group) => n + group.items.length, 0) + limitItems(done.value).length;
+  return total - rendered;
 });
 function showMore() { renderLimit.value += RENDER_STEP; }
 const parsed = computed(() => titleInput.value.trim() ? parseQuickAdd(titleInput.value,parseDate(store.currentDate)) : null);
@@ -149,7 +183,8 @@ async function addTask() {
   const p=parseQuickAdd(titleInput.value,parseDate(store.currentDate));
   addBusy.value=true;
   try {
-    const task=await store.addTask({title:p.title,dueDate:p.dueDate??(['today','upcoming'].includes(view.value)?store.currentDate:''),repeatRule:p.repeatRule??'none',tags:view.value==='tag'?[activeTag.value]:[]});
+    // 只写了时间没写日期，按今天处理
+    const task=await store.addTask({title:p.title,dueDate:p.dueDate??(p.dueTime||['today','upcoming'].includes(view.value)?store.currentDate:''),dueTime:p.dueTime??'',repeatRule:p.repeatRule??'none',tags:view.value==='tag'?[activeTag.value]:[]});
     titleInput.value='';
     // Explicit natural-language dates can place a task outside the current list.
     emit('open-task',toOcc(task));
@@ -167,7 +202,7 @@ function onKey(event: KeyboardEvent) {
   if(event.key==='Escape')navOpen.value=false;
   if(view.value==='calendar'&&['ArrowLeft','ArrowRight'].includes(event.key)){event.preventDefault();window.dispatchEvent(new CustomEvent('wb:calendar-nav',{detail:event.key==='ArrowLeft'?'prev':'next'}));}
 }
-onMounted(()=>window.addEventListener('keydown',onKey));
+onMounted(()=>{window.addEventListener('keydown',onKey);void refreshPushStatus();});
 onBeforeUnmount(()=>window.removeEventListener('keydown',onKey));
 </script>
 
@@ -211,6 +246,8 @@ onBeforeUnmount(()=>window.removeEventListener('keydown',onKey));
             <select id="wb-appearance" :value="appearance" @change="changeAppearance(($event.target as HTMLSelectElement).value as Appearance)"><option v-for="[value,label] in appearanceOptions" :key="value" :value="value">{{ label }}</option></select>
             <button @click="accountOpen=true;settingsOpen=false"><UserCog />{{ currentUser?.isAdmin?'账号与成员':'账号设置' }}</button>
             <button @click="downloadTaskBackup(store.tasks,store.completions);settingsOpen=false"><Download />导出备份</button>
+            <button @click="importOpen=true;settingsOpen=false"><Upload />导入备份</button>
+            <button @click="notifyOpen=true;settingsOpen=false"><Bell />提醒通知<span class="wb-settings-status">{{ pushStatusLabel }}</span></button>
             <button @click="emit('logout')"><LogOut />退出登录</button>
             <p>N 添加任务 · T 今天 · Ctrl+F 搜索</p>
           </PopoverContent>
@@ -239,10 +276,10 @@ onBeforeUnmount(()=>window.removeEventListener('keydown',onKey));
         <div ref="scrollEl" class="wb-task-scroll">
           <template v-if="view==='trash'"><ul v-if="store.recycleBinTasks.length" class="wb-task-list"><RecycleTaskRow v-for="task in store.recycleBinTasks" :key="task.id" :task="task" /></ul><div v-else class="wb-list-empty"><Trash2 /><h2>{{ emptyText }}</h2><p>删除的任务会保留在这里，方便恢复。</p></div></template>
           <template v-else>
-            <section v-for="group in groups" :key="group.key" class="wb-task-group" :class="{ 'is-overdue': group.key==='overdue' }">
-              <button class="wb-group-heading" :aria-expanded="!collapsed.has(group.key)" @click="collapse(group.key)"><ChevronRight :class="{ 'is-expanded': !collapsed.has(group.key) }" /><h2>{{ group.label }}</h2><span>{{ group.items.length }}</span></button>
+            <section v-for="group in visibleGroups" :key="group.key" class="wb-task-group" :class="{ 'is-overdue': group.key==='overdue' }">
+              <button class="wb-group-heading" :aria-expanded="!collapsed.has(group.key)" @click="collapse(group.key)"><ChevronRight :class="{ 'is-expanded': !collapsed.has(group.key) }" /><h2>{{ group.label }}</h2><span>{{ group.total }}</span></button>
               <ul v-show="!collapsed.has(group.key)" class="wb-task-list">
-                <SidebarTaskRow v-for="occ in limitItems(group.items)" :key="`${occ.task.id}:${occ.date}`" :occurrence="occ" :selected="selectedKey===`${occ.task.id}:${occ.date}`" :can-move-today="group.key==='overdue'||view==='inbox'" :can-postpone="view==='today'" @open-task="emit('open-task',$event)" />
+                <SidebarTaskRow v-for="occ in group.items" :key="`${occ.task.id}:${occ.date}`" :occurrence="occ" :selected="selectedKey===`${occ.task.id}:${occ.date}`" :can-move-today="group.key==='overdue'||view==='inbox'" :can-postpone="view==='today'" @open-task="emit('open-task',$event)" />
               </ul>
             </section>
             <section v-if="done.length" class="wb-task-group wb-completed-group"><button class="wb-group-heading" :aria-expanded="showDone" @click="showDone=!showDone"><ChevronRight :class="{ 'is-expanded': showDone }" /><h2>已完成</h2><span>{{ done.length }}</span></button><ul v-show="showDone" class="wb-task-list"><SidebarTaskRow v-for="occ in limitItems(done)" :key="`${occ.task.id}:${occ.date}`" :occurrence="occ" :selected="selectedKey===`${occ.task.id}:${occ.date}`" @open-task="emit('open-task',$event)" /></ul></section>
@@ -254,5 +291,7 @@ onBeforeUnmount(()=>window.removeEventListener('keydown',onKey));
       </template>
     </main>
     <AccountDialog v-model:open="accountOpen" />
+    <ImportDialog v-model:open="importOpen" />
+    <NotificationDialog v-model:open="notifyOpen" />
   </div>
 </template>
