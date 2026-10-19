@@ -22,10 +22,15 @@ import ImportDialog from './ImportDialog.vue';
 import NotificationDialog from './NotificationDialog.vue';
 import { pushState, refreshPushStatus } from '@/lib/push';
 
-defineProps<{ selectedKey?: string }>();
+const props = defineProps<{ selectedKey?: string }>();
 const emit = defineEmits<{ 'open-task': [occ: Occurrence]; logout: [] }>();
 const store = useTaskStore();
 const mobile = useMediaQuery('(max-width: 767px)');
+// 与 TaskSheet 的内嵌详情面板同一断点：详情占住右侧时收集箱侧栏先让位
+const wide = useMediaQuery('(min-width: 1100px)');
+const INBOX_KEY = 'wb.calendarInbox';
+const calendarInbox = ref(localStorage.getItem(INBOX_KEY) === '1');
+function setCalendarInbox(open: boolean) { calendarInbox.value = open; localStorage.setItem(INBOX_KEY, open ? '1' : '0'); }
 type View = 'today' | 'upcoming' | 'all' | 'inbox' | 'completed' | 'calendar' | 'trash' | 'tag' | 'search';
 const initialView = new URLSearchParams(window.location.search).get('view') as View;
 const view = ref<View>(['today','upcoming','all','inbox','completed','calendar','trash','search'].includes(initialView) ? initialView : 'today');
@@ -261,9 +266,10 @@ onBeforeUnmount(()=>window.removeEventListener('keydown',onKey));
           <button v-if="mobile" class="wb-control" aria-label="打开清单导航" :aria-expanded="navOpen" @click="navOpen=true"><Menu /></button>
           <div><h1>{{ title }}</h1><p v-if="view==='today'">{{ dateLabel }}<span class="wb-lunar">{{ lunarLabel }}</span></p><p v-else-if="view==='upcoming'">{{ formatDate(store.currentDate) }} — {{ formatDate(addDays(store.currentDate,6)) }}</p><p v-else-if="view==='inbox'">先记下来，稍后安排</p><p v-else-if="view==='tag'">按标签整理的任务</p></div>
         </div>
+        <button v-if="view==='calendar'&&!mobile" type="button" class="wb-inbox-toggle" :class="{ 'is-on': calendarInbox }" :aria-pressed="calendarInbox" @click="setCalendarInbox(!calendarInbox)"><Inbox aria-hidden="true" />收集箱<span>{{ store.inboxTasks.length }}</span></button>
         <label v-if="!['calendar','trash','completed'].includes(view)" class="wb-sort"><span class="sr-only">任务排序</span><select v-model="sort" aria-label="任务排序"><option value="priority">按优先级</option><option value="date">按日期</option><option value="title">按标题</option></select><ChevronDown /></label>
       </header>
-      <MonthView v-if="view==='calendar'" class="wb-workspace-calendar" @open-task="emit('open-task',$event)" />
+      <MonthView v-if="view==='calendar'" class="wb-workspace-calendar" :inbox-open="calendarInbox && !(wide && !!props.selectedKey)" @open-task="emit('open-task',$event)" @close-inbox="setCalendarInbox(false)" />
       <template v-else>
         <div class="wb-list-tools">
           <form v-if="!['completed','trash','search'].includes(view)" class="wb-quick-entry" :aria-busy="addBusy" @submit.prevent="addTask">

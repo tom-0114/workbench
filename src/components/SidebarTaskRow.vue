@@ -5,7 +5,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { useTaskStore } from "@/stores/tasks";
 import { PRIORITY_LABELS, type Occurrence, type Priority } from "@/lib/types";
 import { addDays, parseDate } from "@/lib/date";
-import { endTaskDrag, startTaskDrag } from "@/lib/task-drag";
 
 const props = withDefaults(
   defineProps<{
@@ -14,7 +13,6 @@ const props = withDefaults(
     canMoveToday?: boolean;
     canMoveInbox?: boolean;
     canPostpone?: boolean;
-    draggable?: boolean;
     selected?: boolean;
   }>(),
   {
@@ -22,7 +20,6 @@ const props = withDefaults(
     canMoveToday: false,
     canMoveInbox: false,
     canPostpone: false,
-    draggable: false,
     selected: false,
   },
 );
@@ -182,25 +179,6 @@ async function postpone() {
   }
 }
 
-function onDragStart(event: DragEvent) {
-  // 重复任务的实例不能拖：拖拽按 taskId 移动，会整个系列搬家
-  if (
-    props.occurrence.isVirtual ||
-    !props.draggable ||
-    mode.value !== "idle" ||
-    !startTaskDrag(event, props.occurrence.task.id)
-  ) {
-    event.preventDefault();
-    return;
-  }
-  (event.currentTarget as HTMLElement).classList.add("is-drag-source");
-}
-
-function onDragEnd(event: DragEvent) {
-  (event.currentTarget as HTMLElement).classList.remove("is-drag-source");
-  endTaskDrag();
-}
-
 async function confirmDelete() {
   if (busy.value) return;
   busy.value = true;
@@ -220,15 +198,11 @@ async function confirmDelete() {
     class="wb-item wb-sidebar-row"
     :class="[
       occurrence.completed ? 'wb-item-done' : '',
-      draggable ? 'is-draggable' : '',
       mode !== 'idle' ? 'is-active' : '',
       selected ? 'is-selected' : '',
       occurrence.task.priority === 3 && !occurrence.completed ? 'is-pri-high' : '',
     ]"
     :data-task-id="occurrence.task.id"
-    :draggable="draggable && mode === 'idle' && !occurrence.isVirtual"
-    @dragstart="onDragStart"
-    @dragend="onDragEnd"
   >
     <button
       type="button"

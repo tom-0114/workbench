@@ -246,6 +246,23 @@ try {
     await page.mouse.up();
     await waitForTask(1,t=>t.dueDate===localDate(offset));
   });
+  await check('calendar inbox sidebar: quick add, drag in and drag back',async()=>{
+    await reset();await page.reload();await nav(page,'日历');
+    await page.locator('.wb-inbox-toggle').click();const panel=page.locator('.wb-cal-inbox');await panel.waitFor();
+    await panel.getByLabel('记到收集箱').fill('侧栏记录的事');await panel.getByLabel('记到收集箱').press('Enter');
+    await panel.locator('.wb-inbox-item').filter({hasText:'侧栏记录的事'}).waitFor();
+    const offset=new Date().getDay()===0?-1:1;
+    const src=await panel.locator('.wb-inbox-item').filter({hasText:'预约周末的口腔检查'}).boundingBox();
+    const dst=await page.locator(`.fc-daygrid-day[data-date="${localDate(offset)}"]`).boundingBox();
+    await page.mouse.move(src.x+60,src.y+src.height/2);await page.mouse.down();await page.mouse.move(dst.x+dst.width/2,dst.y+dst.height/2,{steps:15});await page.mouse.up();
+    await waitForTask(7,t=>t.dueDate===localDate(offset));
+    const ev=await page.locator(`.fc-daygrid-day[data-date="${localDate(offset)}"] .fc-daygrid-event`).filter({hasText:'预约周末的口腔检查'}).locator('.wb-title').boundingBox();
+    const list=await panel.locator('.wb-cal-inbox-list').boundingBox();
+    await page.mouse.move(ev.x+10,ev.y+ev.height/2);await page.mouse.down();await page.mouse.move(list.x+list.width/2,list.y+80,{steps:15});
+    await page.locator('.wb-cal-inbox.is-drop-target').waitFor();await page.mouse.up();
+    await waitForTask(7,t=>t.dueDate==='');
+    await panel.getByRole('button',{name:'收起收集箱'}).click();await panel.waitFor({state:'hidden'});
+  });
   await check('detail sets time and reminder, row shows time and schedule syncs',async()=>{
     await reset();await page.reload();await nav(page,'最近 7 天');await openDetail(page,'准备下周分享的提纲');
     await page.locator('#wb-time').fill('14:30');
@@ -343,6 +360,12 @@ try {
     const r=await row(m,'手机收集箱任务');
     await r.getByRole('button',{name:/日期：/}).click();await m.locator('.wb-date-pop').last().locator('input[type="date"]').fill(localDate(1));await r.getByRole('button',{name:'日期：明天，点击修改'}).waitFor();
     await r.locator('.wb-pri-btn').click();await m.locator('.wb-pri-menu').last().getByRole('button',{name:'设为高优先级'}).click();await m.locator('.wb-sidebar-row.is-pri-high').filter({has:m.getByText('手机收集箱任务',{exact:true})}).waitFor();
+  });
+  await check('mobile calendar inbox sheet schedules a task',async()=>{
+    await nav(m,'日历');await m.locator('.wb-calendar-inbox-btn').click();
+    const sheet=m.locator('.wb-inbox-sheet');await sheet.waitFor();
+    const item=sheet.locator('li').filter({hasText:'预约周末的口腔检查'});await item.getByRole('button',{name:'明天',exact:true}).click();
+    await waitForTask(7,t=>t.dueDate===localDate(1));
   });
   await mobileContext.close();
   await mkdir('docs/ui-redesign',{recursive:true});

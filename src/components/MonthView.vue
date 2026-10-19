@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { Plus } from "lucide-vue-next";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { Inbox, Plus } from "lucide-vue-next";
 import FullCalendar from "@fullcalendar/vue3";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import listPlugin from "@fullcalendar/list";
 import multiMonthPlugin from "@fullcalendar/multimonth";
-import interactionPlugin, { type DateClickArg } from "@fullcalendar/interaction";
+import interactionPlugin, { type DateClickArg, type DropArg, type EventDragStopArg } from "@fullcalendar/interaction";
 import { useMediaQuery } from "@vueuse/core";
 import zhCn from "@fullcalendar/core/locales/zh-cn";
 import type {
@@ -19,15 +19,12 @@ import { useTaskStore } from "@/stores/tasks";
 import type { Occurrence, RepeatRule } from "@/lib/types";
 import { fmtDate } from "@/lib/date";
 import { getDayMark } from "@/lib/cn-holidays";
-import {
-  endTaskDrag,
-  getDraggedTaskId,
-  hasDraggedTask,
-  TASK_DRAG_END_EVENT,
-} from "@/lib/task-drag";
 import QuickAddPopover from "./QuickAddPopover.vue";
+import CalendarInbox from "./CalendarInbox.vue";
+import InboxSheet from "./InboxSheet.vue";
 
-const emit = defineEmits<{ (e: "open-task", occ: Occurrence): void }>();
+const props = defineProps<{ inboxOpen?: boolean }>();
+const emit = defineEmits<{ (e: "open-task", occ: Occurrence): void; (e: "close-inbox"): void }>();
 const store = useTaskStore();
 
 // 保持引用稳定，避免 options 重算时触发日历整体重建
@@ -107,63 +104,52 @@ async function onEventDrop(arg: EventDropArg) {
   }
 }
 
-let highlightedDropElement: HTMLElement | null = null;
-
-function clearCalendarDropTarget() {
-  highlightedDropElement?.classList.remove("wb-native-drop-active");
-  highlightedDropElement = null;
-}
-
-function findCalendarDropTarget(target: EventTarget | null): { element: HTMLElement; date: string } | null {
-  const element = target instanceof Element
-    ? target.closest<HTMLElement>(".fc-daygrid-day[data-date]") ??
-      target.closest<HTMLElement>("[data-wb-drop-date]")
-    : null;
-  const date = element?.dataset.wbDropDate || element?.dataset.date;
-  return element && date ? { element, date: date.slice(0, 10) } : null;
-}
-
-function highlightCalendarDropTarget(element: HTMLElement) {
-  if (highlightedDropElement === element) return;
-  clearCalendarDropTarget();
-  highlightedDropElement = element;
-  element.classList.add("wb-native-drop-active");
-}
-
-function onCalendarDragOver(event: DragEvent) {
-  if (!hasDraggedTask(event.dataTransfer)) return;
-  const target = findCalendarDropTarget(event.target);
-  if (!target) {
-    clearCalendarDropTarget();
-    return;
-  }
-  event.preventDefault();
-  if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
-  highlightCalendarDropTarget(target.element);
-}
-
-function onCalendarDragLeave(event: DragEvent) {
-  const calendar = event.currentTarget as HTMLElement;
-  const next = event.relatedTarget as Node | null;
-  if (next && calendar.contains(next)) return;
-  clearCalendarDropTarget();
-}
-
-async function onCalendarDrop(event: DragEvent) {
-  if (!hasDraggedTask(event.dataTransfer)) return;
-  const target = findCalendarDropTarget(event.target);
-  if (!target) return;
-  event.preventDefault();
-  const taskId = getDraggedTaskId(event.dataTransfer);
-  clearCalendarDropTarget();
-  endTaskDrag();
-  if (!taskId) return;
+/** 收集箱事项拖到日历某天：FullCalendar 外部拖拽（create: false，只回调不建事件） */
+async function onExternalDrop(arg: DropArg) {
+  const id = Number(arg.draggedEl.dataset.taskId);
+  if (!id) return;
   try {
-    await store.moveTask(taskId, target.date);
+    await store.moveTask(id, arg.dateStr.slice(0, 10));
   } catch {
     // Store 负责错误提示。
   }
 }
+
+// 日历事项拖回收集箱：落点在日历之外，FullCalendar 会自动回弹，这里按松手位置判断
+const inboxDropActive = ref(false);
+function isOverInbox(x: number, y: number) {
+  return !!document.elementFromPoint(x, y)?.closest(".wb-cal-inbox");
+}
+function trackInboxHover(event: PointerEvent) {
+  inboxDropActive.value = isOverInbox(event.clientX, event.clientY);
+}
+function onEventDragStart() {
+  if (props.inboxOpen) document.addEventListener("pointermove", trackInboxHover);
+}
+async function onEventDragStop(arg: EventDragStopArg) {
+  document.removeEventListener("pointermove", trackInboxHover);
+  const wasOver = inboxDropActive.value;
+  inboxDropActive.value = false;
+  const point = arg.jsEvent as MouseEvent;
+  if (!props.inboxOpen || !(wasOver || isOverInbox(point.clientX, point.clientY))) return;
+  const occ = arg.event.extendedProps.occ as Occurrence;
+  try {
+    await store.moveTask(occ.task.id, "");
+  } catch {
+    // Store 负责错误提示。
+  }
+}
+
+const inboxSheetOpen = ref(false);
+
+// 侧栏开合会改变日历宽度，FullCalendar 只监听窗口尺寸，需要手动通知
+watch(
+  () => props.inboxOpen,
+  async () => {
+    await nextTick();
+    calRef.value?.getApi().updateSize();
+  },
+);
 
 async function onQuickCreate(
   title: string,
@@ -200,13 +186,10 @@ function onCalendarNav(event: Event) {
   else if (detail === "today") api.today();
 }
 
-onMounted(() => {
-  window.addEventListener(TASK_DRAG_END_EVENT, clearCalendarDropTarget);
-  window.addEventListener("wb:calendar-nav", onCalendarNav);
-});
+onMounted(() => window.addEventListener("wb:calendar-nav", onCalendarNav));
 onBeforeUnmount(() => {
-  window.removeEventListener(TASK_DRAG_END_EVENT, clearCalendarDropTarget);
   window.removeEventListener("wb:calendar-nav", onCalendarNav);
+  document.removeEventListener("pointermove", trackInboxHover);
 });
 
 function openMobileQuickAdd() {
@@ -254,9 +237,7 @@ const options = computed<CalendarOptions>(() => ({
     return `${d.getMonth() + 1}月${d.getDate()}日`;
   },
   dayHeaderDidMount: (arg) => {
-    if (!arg.view.type.startsWith("list")) return;
-    arg.el.dataset.wbDropDate = fmtDate(arg.date);
-    if (fmtDate(arg.date) === store.currentDate) arg.el.classList.add("wb-list-today");
+    if (arg.view.type.startsWith("list") && fmtDate(arg.date) === store.currentDate) arg.el.classList.add("wb-list-today");
   },
   noEventsContent: "本周没有待办",
   // 日期数字 + 节假日角标（如 国庆·休 / 班）
@@ -291,13 +272,16 @@ const options = computed<CalendarOptions>(() => ({
     return (oa?.task.id ?? 0) - (ob?.task.id ?? 0);
   },
   eventOrderStrict: true,
-  // 日历事项使用 FullCalendar 自带的拖拽；收集箱事项仍由外层原生 drop 处理。
+  // 日历事项与收集箱事项都走 FullCalendar 的拖拽（收集箱见 CalendarInbox 的 Draggable）
   editable: true,
   // 任务只有单个日期，禁止拉伸成跨天事件
   eventDurationEditable: false,
   // 拖拽镜像是 fixed 定位，挂在日历内时会被祖先的 transform（视图入场动画）带偏
   fixedMirrorParent: document.body,
-  droppable: false,
+  droppable: true,
+  drop: onExternalDrop,
+  eventDragStart: onEventDragStart,
+  eventDragStop: onEventDragStop,
   events: events.value,
   datesSet: onDatesSet,
   dateClick: onDateClick,
@@ -355,14 +339,17 @@ const options = computed<CalendarOptions>(() => ({
 </script>
 
 <template>
-  <div
-    class="wb-calendar h-full"
-    @dragover="onCalendarDragOver"
-    @dragleave="onCalendarDragLeave"
-    @drop="onCalendarDrop"
-  >
-    <!-- key 绑定日期：跨零点时重建日历，让“今天”的蓝圈移动到新的一天 -->
-    <FullCalendar ref="calRef" :key="`${store.currentDate}:${isMobile ? 'mobile' : 'desktop'}`" :options="options" />
+  <div class="wb-calendar h-full" :class="{ 'has-inbox': inboxOpen && !isMobile }">
+    <div class="wb-calendar-main">
+      <!-- key 绑定日期：跨零点时重建日历，让“今天”的蓝圈移动到新的一天 -->
+      <FullCalendar ref="calRef" :key="`${store.currentDate}:${isMobile ? 'mobile' : 'desktop'}`" :options="options" />
+    </div>
+    <CalendarInbox
+      v-if="inboxOpen && !isMobile"
+      :drop-active="inboxDropActive"
+      @open-task="emit('open-task', $event)"
+      @close="emit('close-inbox')"
+    />
     <QuickAddPopover
       v-if="quickAdd"
       :date="quickAdd.date"
@@ -372,6 +359,18 @@ const options = computed<CalendarOptions>(() => ({
       @create="onQuickCreate"
       @close="quickAdd = null"
     />
+    <button
+      v-if="isMobile"
+      type="button"
+      class="wb-calendar-inbox-btn"
+      :aria-label="`收集箱，${store.inboxTasks.length} 项`"
+      @click="inboxSheetOpen = true"
+    >
+      <Inbox aria-hidden="true" />
+      <span>收集箱</span>
+      <span v-if="store.inboxTasks.length" class="wb-calendar-inbox-badge">{{ store.inboxTasks.length }}</span>
+    </button>
+    <InboxSheet v-if="isMobile" v-model:open="inboxSheetOpen" />
     <button
       v-if="isMobile"
       type="button"
