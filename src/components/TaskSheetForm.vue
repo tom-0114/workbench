@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { Flame, LoaderCircle } from "lucide-vue-next";
 import type { Task } from "@/lib/types";
 import { PRIORITY_LABELS, REMIND_OPTIONS_ALLDAY, REMIND_OPTIONS_TIMED, REPEAT_LABELS } from "@/lib/types";
 import { useTaskStore } from "@/stores/tasks";
 import { pushState } from "@/lib/push";
+import { REMIND_OFFSET_MAX, REMIND_OFFSET_MIN, reminderBase, reminderTime } from "@/lib/reminders";
+import { fmtDate } from "@/lib/date";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -37,22 +39,51 @@ const tagsInput = defineModel<string>("tagsInput", { required: true });
 const priorityOptions: (Task["priority"])[] = [0, 1, 2, 3];
 const store = useTaskStore();
 
-// Select 的值不能为空串，用 "none" 表示不提醒
+// Select 的值不能为空串，用 "none" 表示不提醒，"custom" 表示自定义具体时刻
 const remindOptions = computed(() => (props.draft.dueTime ? REMIND_OPTIONS_TIMED : REMIND_OPTIONS_ALLDAY));
+const isPreset = (offset: number | null) => offset != null && remindOptions.value.some(([v]) => v === offset);
+// 自定义时刻仍存成相对任务时间的提前量，重复任务每次按同样的提前量提醒
+const customMode = ref(props.draft.remindOffset != null && !isPreset(props.draft.remindOffset));
+watch(
+  () => props.draft.id,
+  () => (customMode.value = props.draft.remindOffset != null && !isPreset(props.draft.remindOffset)),
+);
 const remindValue = computed({
-  get: () => (props.draft.remindOffset == null ? "none" : String(props.draft.remindOffset)),
+  get: () => (props.draft.remindOffset == null ? "none" : customMode.value ? "custom" : String(props.draft.remindOffset)),
   set: (value: string) => {
-    props.draft.remindOffset = value === "none" ? null : Number(value);
+    customMode.value = value === "custom";
+    if (value === "none") props.draft.remindOffset = null;
+    else if (value !== "custom") props.draft.remindOffset = Number(value);
+    else if (props.draft.remindOffset == null) props.draft.remindOffset = 0;
   },
 });
-// 去掉时间后，“提前 15 分钟”这类选项不再适用，退回当天 09:00
+// 去掉时间后，“提前 15 分钟”这类选项不再适用，退回当天 09:00；自定义时刻保持提前量不变
 watch(
   () => props.draft.dueTime,
   () => {
-    const offset = props.draft.remindOffset;
-    if (offset != null && !remindOptions.value.some(([v]) => v === offset)) props.draft.remindOffset = 0;
+    if (!customMode.value && props.draft.remindOffset != null && !isPreset(props.draft.remindOffset)) props.draft.remindOffset = 0;
   },
 );
+const pad = (n: number) => String(n).padStart(2, "0");
+const customAt = computed({
+  get: () => {
+    if (!props.draft.dueDate || props.draft.remindOffset == null) return "";
+    const d = reminderTime(props.draft.dueDate, props.draft.dueTime, props.draft.remindOffset);
+    return `${fmtDate(d)}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  },
+  set: (value: string) => {
+    if (!value || !props.draft.dueDate) return;
+    const base = reminderBase(props.draft.dueDate, props.draft.dueTime).getTime();
+    const offset = Math.round((base - new Date(value).getTime()) / 60_000);
+    props.draft.remindOffset = Math.min(REMIND_OFFSET_MAX, Math.max(REMIND_OFFSET_MIN, offset));
+  },
+});
+const customHint = computed(() => {
+  if (!customMode.value || props.draft.remindOffset == null || !props.draft.dueDate) return "";
+  const fire = reminderTime(props.draft.dueDate, props.draft.dueTime, props.draft.remindOffset);
+  if (fire.getTime() < Date.now()) return "这个时间已经过去，不会再提醒";
+  return props.draft.repeatRule === "none" ? "" : "重复任务的每一次都按同样的间隔提醒";
+});
 const pushHint = computed(() => {
   if (props.draft.remindOffset == null) return "";
   return ({ off: "此设备还没开启通知，可在 设置 → 提醒通知 里开启", denied: "浏览器已拦截通知，需要在浏览器设置里允许", "needs-install": "iPhone 需先添加到主屏幕，并从主屏幕打开后开启通知", "server-off": "服务器还没配置推送，暂时不会发出提醒", unsupported: "这个浏览器不支持通知" } as Record<string, string>)[pushState.status] ?? "";
@@ -128,9 +159,18 @@ const repeatOptions: Task["repeatRule"][] = [
               <SelectItem v-for="[value, label] in remindOptions" :key="value" :value="String(value)">
                 {{ label }}
               </SelectItem>
+              <SelectItem value="custom">自定义时间…</SelectItem>
             </SelectGroup>
           </SelectContent>
         </Select>
+        <Input
+          v-if="remindValue === 'custom'"
+          v-model="customAt"
+          type="datetime-local"
+          aria-label="提醒时间"
+          class="min-w-0"
+        />
+        <p v-if="customHint" class="text-[13px]" style="color: var(--text-secondary)">{{ customHint }}</p>
         <p v-if="pushHint" class="text-[13px]" style="color: var(--text-secondary)">{{ pushHint }}</p>
       </div>
 

@@ -260,12 +260,12 @@ function validIso(value) {
   return typeof value === "string" && !Number.isNaN(Date.parse(value)) ? new Date(value).toISOString() : null;
 }
 
-/** 新增字段统一在这里规整：时间只接受 HH:mm，提醒提前量 0-7 天，完成时间仅在已完成时保留 */
+/** 新增字段统一在这里规整：时间只接受 HH:mm，提醒提前量 -30 天到 365 天（负数为到期后提醒），完成时间仅在已完成时保留 */
 function taskExtras(input) {
   const dueTime = TIME_RE.test(input.dueTime ?? "") && input.dueDate ? input.dueTime : "";
   const offset = Number(input.remindOffset);
   const remindOffset =
-    input.remindOffset !== null && input.remindOffset !== undefined && Number.isInteger(offset) && offset >= 0 && offset <= 7 * 24 * 60 && input.dueDate
+    input.remindOffset !== null && input.remindOffset !== undefined && Number.isInteger(offset) && offset >= -30 * 1440 && offset <= 365 * 1440 && input.dueDate
       ? offset
       : null;
   const completedAt = input.completed ? validIso(input.completedAt) : null;

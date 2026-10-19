@@ -277,6 +277,20 @@ try {
     await openDetail(page,'准备下周分享的提纲');await page.locator('#wb-time').fill('');
     assert.match(await page.getByRole('combobox',{name:'提醒'}).textContent(),/当天 09:00/);await closed(page);
   });
+  await check('custom reminder picks an exact date and minute',async()=>{
+    await openDetail(page,'准备下周分享的提纲');await page.locator('#wb-time').fill('14:30');
+    await page.getByRole('combobox',{name:'提醒'}).click();await page.getByRole('option',{name:'自定义时间…',exact:true}).click();
+    await page.getByLabel('提醒时间').fill(`${localDate(1)}T08:07`);
+    await save(page);
+    // 14:30 前一天 08:07 = 提前 30 小时 23 分
+    await waitForTask(8,t=>t.dueTime==='14:30'&&t.remindOffset===30*60+23);
+    await openDetail(page,'准备下周分享的提纲');
+    assert.match(await page.getByRole('combobox',{name:'提醒'}).textContent(),/自定义时间/);
+    assert.equal(await page.getByLabel('提醒时间').inputValue(),`${localDate(1)}T08:07`);
+    await closed(page);
+    let synced;for(let i=0;i<25&&!synced;i++){synced=(await (await fetch('http://127.0.0.1:3002/__test/reminders')).json()).find(r=>r.taskId===8&&r.fireAt===new Date(`${localDate(1)}T08:07`).toISOString());if(!synced)await new Promise(r=>setTimeout(r,200));}
+    assert.ok(synced,'自定义提醒时刻应同步到后端');
+  });
   await check('quick add parses time',async()=>{
     const input=page.getByRole('textbox',{name:'添加任务',exact:true});await input.fill('后天下午3点 体检');
     await page.locator('.wb-parse-hint').filter({hasText:'15:00'}).waitFor();
