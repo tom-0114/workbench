@@ -19,6 +19,8 @@ export interface Task {
   /** 重复任务的单次改期例外：锚点展开日期 -> 新日期；空串表示该次不出现 */
   dateOverrides?: Record<string, string>;
   deletedAt: string | null; // 软删除时间；非空时只在回收站显示
+  /** 子任务指向父任务（只有一层）；子任务没有日期，只在父任务下面显示 */
+  parentId?: number | null;
   createdAt: string;
   updatedAt: string;
 }

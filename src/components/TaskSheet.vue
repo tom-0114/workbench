@@ -54,6 +54,19 @@ function canSwitch() {
 }
 defineExpose({ canSwitch });
 
+// 勾子任务会联动父任务的完成状态；用户没手动改过“已完成”时，弹窗里的勾选跟着同步
+watch(
+  () => store.tasks.find((t) => t.id === draft.value?.id)?.completed,
+  (completed) => {
+    if (completed == null || !draft.value || draft.value.completed === completed) return;
+    const base = JSON.parse(original.value) as { task: Task; tags: string };
+    if (draft.value.completed !== base.task.completed) return;
+    draft.value.completed = completed;
+    base.task.completed = completed;
+    original.value = JSON.stringify(base);
+  },
+);
+
 watch(
   () => [props.occurrence, open.value] as const,
   () => {
@@ -131,6 +144,7 @@ async function remove() {
       <TaskSheetForm
         v-model:tags-input="tagsInput"
         :draft="draft"
+        :occurrence-date="occurrence?.date ?? ''"
         :saving="saving"
         :removing="removing"
         :confirming-delete="confirmingDelete"
@@ -161,6 +175,7 @@ async function remove() {
       <TaskSheetForm
         v-model:tags-input="tagsInput"
         :draft="draft"
+        :occurrence-date="occurrence?.date ?? ''"
         :saving="saving"
         :removing="removing"
         :confirming-delete="confirmingDelete"

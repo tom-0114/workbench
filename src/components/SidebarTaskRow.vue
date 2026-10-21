@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
-import { Bell, CalendarArrowDown, CalendarClock, CalendarDays, Check, Flag, Flame, Inbox, LoaderCircle, MoreHorizontal, Pencil, Repeat2, Trash2, X } from "lucide-vue-next";
+import { Bell, CalendarArrowDown, CalendarClock, CalendarDays, Check, Flag, Flame, Inbox, ListChecks, LoaderCircle, MoreHorizontal, Pencil, Repeat2, Trash2, X } from "lucide-vue-next";
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useTaskStore } from "@/stores/tasks";
 import { reminderLabel } from "@/lib/reminders";
 import DateField from "@/components/DateField.vue";
+import SubtaskList from "@/components/SubtaskList.vue";
+import { expandedSubtasks } from "@/lib/subtask-ui";
 import { PRIORITY_LABELS, type Occurrence, type Priority } from "@/lib/types";
 import { addDays, parseDate } from "@/lib/date";
 
@@ -15,12 +17,15 @@ const props = withDefaults(
     canMoveInbox?: boolean;
     canPostpone?: boolean;
     selected?: boolean;
+    /** 今天、最近 7 天里可以拖动改期 */
+    dragEnabled?: boolean;
   }>(),
   {
     canMoveToday: false,
     canMoveInbox: false,
     canPostpone: false,
     selected: false,
+    dragEnabled: false,
   },
 );
 
@@ -62,6 +67,23 @@ const remindLabel = computed(() =>
   props.occurrence.completed ? "" : reminderLabel(props.occurrence.task, props.occurrence.date, store.currentDate),
 );
 const pickedDate = computed({ get: () => dateDraft.value, set: (value: string) => void applyDate(value) });
+// 子任务：行下面显示进度，展开后可勾选、追加；展开状态跨清单保留
+const occKey = computed(() => `${props.occurrence.task.id}:${props.occurrence.date}`);
+const subtasks = computed(() => store.subtasksByParent.get(props.occurrence.task.id) ?? []);
+const subtaskDone = computed(
+  () => subtasks.value.filter((sub) => store.isSubtaskDone(sub, props.occurrence.task, props.occurrence.date)).length,
+);
+const subtasksOpen = computed(() => expandedSubtasks.has(occKey.value));
+const subtaskList = ref<InstanceType<typeof SubtaskList>>();
+function toggleSubtasks(open = !subtasksOpen.value) {
+  if (open) expandedSubtasks.add(occKey.value);
+  else expandedSubtasks.delete(occKey.value);
+}
+async function startAddSubtask() {
+  toggleSubtasks(true);
+  await nextTick();
+  requestAnimationFrame(() => subtaskList.value?.focusAdd());
+}
 const streak = computed(() => (props.occurrence.isVirtual ? store.streaks.get(props.occurrence.task.id) ?? 0 : 0));
 const isOverdue = computed(
   () => !!props.occurrence.date && props.occurrence.date < store.currentDate && !props.occurrence.completed,
@@ -205,8 +227,11 @@ async function confirmDelete() {
       mode !== 'idle' ? 'is-active' : '',
       selected ? 'is-selected' : '',
       occurrence.task.priority === 3 && !occurrence.completed ? 'is-pri-high' : '',
+      subtasks.length || subtasksOpen ? 'has-subtasks' : '',
     ]"
     :data-task-id="occurrence.task.id"
+    :data-occ-key="occKey"
+    :data-drag="dragEnabled && !occurrence.completed && mode === 'idle' ? '' : undefined"
   >
     <button
       type="button"
@@ -351,6 +376,10 @@ async function confirmDelete() {
           <Pencil aria-hidden="true" />
           重命名
         </button>
+        <button type="button" aria-label="添加子任务" title="在这个任务下面加子任务" @click="startAddSubtask">
+          <ListChecks aria-hidden="true" />
+          添加子任务
+        </button>
         <!-- 改期类操作会移动整个系列，重复任务实例不显示 -->
         <button
           v-if="canMoveToday && !occurrence.isVirtual"
@@ -394,6 +423,26 @@ async function confirmDelete() {
         </button>
         </PopoverContent>
       </Popover>
+
+      <button
+        v-if="subtasks.length"
+        type="button"
+        class="wb-row-subs"
+        :class="{ 'is-all-done': subtaskDone === subtasks.length }"
+        :aria-expanded="subtasksOpen"
+        :aria-label="`子任务 ${subtaskDone}/${subtasks.length}，${subtasksOpen ? '收起' : '展开'}`"
+        @click="toggleSubtasks()"
+      >
+        <ListChecks aria-hidden="true" />{{ subtaskDone }}/{{ subtasks.length }}
+      </button>
+      <SubtaskList
+        v-if="subtasksOpen"
+        ref="subtaskList"
+        class="wb-row-subtasks"
+        :parent-id="occurrence.task.id"
+        :date="occurrence.date"
+        @open-parent="emit('open-task', occurrence)"
+      />
     </template>
   </li>
 </template>

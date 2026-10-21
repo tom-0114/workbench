@@ -8,6 +8,7 @@ import { currentUser } from '@/lib/auth';
 import { addDays, fmtDate, parseDate } from '@/lib/date';
 import { parseQuickAdd } from '@/lib/nl-parse';
 import { searchTasks } from '@/lib/search';
+import { useListDrag } from '@/lib/list-drag';
 import { expandOccurrences } from '@/lib/recurrence';
 import { loadAppearance, setAppearance, type Appearance } from '@/lib/appearance';
 import { downloadTaskBackup } from '@/lib/backup';
@@ -46,6 +47,16 @@ const addInput = ref<HTMLInputElement>();
 const searchInput = ref<HTMLInputElement>();
 const scrollEl = ref<HTMLElement>();
 const addBusy = ref(false);
+// 新建后不弹窗：底部提示一下，可点“编辑”；新行短暂高亮
+const notice = ref<{ text: string; occ?: Occurrence } | null>(null);
+const justAdded = ref('');
+let noticeTimer: ReturnType<typeof setTimeout> | undefined;
+function showNotice(text: string, occ?: Occurrence) {
+  clearTimeout(noticeTimer);
+  notice.value = { text, occ };
+  noticeTimer = setTimeout(() => (notice.value = null), 4000);
+}
+const WEEKDAYS = ['周日','周一','周二','周三','周四','周五','周六'];
 const showDone = ref(true);
 const collapsed = ref(new Set<string>());
 const sort = ref('priority');
@@ -113,7 +124,8 @@ const occurrences = computed(() => {
   if(view.value==='completed') return completed.value;
   if(view.value==='tag') return all.value.filter(o => o.task.tags.includes(activeTag.value));
   if(view.value==='search') {
-    const ids = new Set(searchTasks(store.activeTasks,query.value).map(t=>t.id));
+    // 子任务命中时显示它的父任务
+    const ids = new Set(searchTasks(store.tasks.filter(t=>!t.deletedAt),query.value).map(t=>t.parentId ?? t.id));
     return all.value.filter(o=>ids.has(o.task.id));
   }
   return all.value;
@@ -121,10 +133,14 @@ const occurrences = computed(() => {
 const pending = computed(() => occurrences.value.filter(o=>!o.completed).sort((a,b) => sort.value==='title' ? a.task.title.localeCompare(b.task.title,'zh-CN') : sort.value==='date' ? a.date.localeCompare(b.date)||(a.task.dueTime||'99').localeCompare(b.task.dueTime||'99')||a.task.id-b.task.id : b.task.priority-a.task.priority||a.task.id-b.task.id));
 const done = computed(() => view.value==='completed' ? [] : occurrences.value.filter(o=>o.completed));
 const groups = computed(() => {
-  if(view.value==='today') return [
-    {key:'overdue',label:'逾期',items:store.overdueTasks.map(toOcc)},
-    {key:'today',label:'今天',items:pending.value},
-  ].filter(g=>g.items.length);
+  // 有逾期时“今天”分组即使为空也保留，作为拖放落点
+  if(view.value==='today') {
+    const overdue = store.overdueTasks.map(toOcc);
+    return [
+      {key:'overdue',label:'逾期',items:overdue},
+      {key:'today',label:'今天',items:pending.value},
+    ].filter(g=>g.items.length||(g.key==='today'&&overdue.length));
+  }
   if(view.value==='completed') {
     const byDay = new Map<string, Occurrence[]>();
     for (const o of completed.value) {
@@ -134,9 +150,10 @@ const groups = computed(() => {
     }
     return [...byDay].map(([day, items]) => ({ key: day, label: day===addDays(store.currentDate,-1) ? '昨天' : formatDate(day), items }));
   }
+  // 7 天都列出来，空的日子也能把任务拖进去
   if(view.value==='upcoming') {
-    const dates = [...new Set(pending.value.map(o=>o.date))].sort();
-    return dates.map(date=>({key:date,label:formatDate(date),items:pending.value.filter(o=>o.date===date)}));
+    if(!pending.value.length) return [];
+    return Array.from({length:7},(_,i)=>addDays(store.currentDate,i)).map(date=>({key:date,label:`${formatDate(date)} · ${WEEKDAYS[parseDate(date).getDay()]}`,items:pending.value.filter(o=>o.date===date)}));
   }
   return [{key:'pending',label:view.value==='inbox'?'未安排日期':'待办',items:pending.value}].filter(g=>g.items.length);
 });
@@ -163,6 +180,22 @@ const moreCount = computed(() => {
   return total - rendered;
 });
 function showMore() { renderLimit.value += RENDER_STEP; }
+/** 分组对应的拖放日期：今天清单只有“今天”组可放，最近 7 天每天都可放 */
+function dropDate(key: string) {
+  if(view.value==='today') return key==='today' ? store.currentDate : undefined;
+  if(view.value==='upcoming') return key;
+  return undefined;
+}
+const listDrag = useListDrag({ container: scrollEl, onDrop: dropOnDate });
+// 重复任务只挪这一次，不动整个系列
+async function dropOnDate(occKey: string, date: string) {
+  const occ = groups.value.flatMap(g=>g.items).find(o=>`${o.task.id}:${o.date}`===occKey);
+  if(!occ||occ.date===date) return;
+  try {
+    await store.rescheduleOccurrence(occ, date, occ.isVirtual ? 'once' : 'series');
+    showNotice(`「${occ.task.title}」已移到${formatDate(date)}`);
+  } catch { /* Store 显示错误提示 */ }
+}
 const parsed = computed(() => titleInput.value.trim() ? parseQuickAdd(titleInput.value,parseDate(store.currentDate)) : null);
 const emptyText = computed(() => ({today:'今天的事情都处理好了',inbox:'把还没安排的事情记在这里',completed:'完成的任务会出现在这里',trash:'回收站是空的',search:query.value ? '没有找到相关任务' : '搜索标题、标签或备注'} as Record<string,string>)[view.value] || '这份清单还没有待办');
 
@@ -190,8 +223,13 @@ async function addTask() {
     // 只写了时间没写日期，按今天处理
     const task=await store.addTask({title:p.title,dueDate:p.dueDate??(p.dueTime||['today','upcoming'].includes(view.value)?store.currentDate:''),dueTime:p.dueTime??'',repeatRule:p.repeatRule??'none',tags:view.value==='tag'?[activeTag.value]:[]});
     titleInput.value='';
-    // Explicit natural-language dates can place a task outside the current list.
-    emit('open-task',toOcc(task));
+    // 直接创建不弹窗；落到当前清单之外（如写了“明天”）时在提示里说明去向
+    const occ=toOcc(task);
+    const key=`${task.id}:${task.dueDate}`;
+    await nextTick();
+    const visible=groups.value.some(g=>g.items.some(o=>`${o.task.id}:${o.date}`===key));
+    showNotice(visible?`已添加「${task.title}」`:`已添加「${task.title}」到${task.dueDate?formatDate(task.dueDate):'收集箱'}`,occ);
+    if(visible){justAdded.value=key;setTimeout(()=>{if(justAdded.value===key)justAdded.value='';},1600);}
   } catch { await nextTick();addInput.value?.focus(); }
   finally {addBusy.value=false;}
 }
@@ -278,15 +316,17 @@ onBeforeUnmount(()=>window.removeEventListener('keydown',onKey));
           <p v-if="parsed?.hint" class="wb-parse-hint">{{ parsed.hint }}</p>
           <div v-if="view==='search'" class="wb-search-field"><Search /><input ref="searchInput" v-model="query" aria-label="搜索任务" placeholder="搜索标题、标签或备注" /><button v-if="query" class="wb-control" aria-label="清空搜索" @click="query='' "><X /></button></div>
         </div>
-        <div ref="scrollEl" class="wb-task-scroll">
+        <div ref="scrollEl" class="wb-task-scroll" :class="{ 'is-dragging': listDrag.dragging.value }" @pointerdown="listDrag.onPointerDown">
           <template v-if="view==='trash'"><ul v-if="store.recycleBinTasks.length" class="wb-task-list"><RecycleTaskRow v-for="task in store.recycleBinTasks" :key="task.id" :task="task" /></ul><div v-else class="wb-list-empty"><Trash2 /><h2>{{ emptyText }}</h2><p>删除的任务会保留在这里，方便恢复。</p></div></template>
           <template v-else>
-            <section v-for="group in visibleGroups" :key="group.key" class="wb-task-group" :class="{ 'is-overdue': group.key==='overdue' }">
+            <section v-for="group in visibleGroups" :key="group.key" class="wb-task-group" :class="{ 'is-overdue': group.key==='overdue', 'is-empty-day': !group.total }" :data-drop-date="dropDate(group.key)">
               <button class="wb-group-heading" :aria-expanded="!collapsed.has(group.key)" @click="collapse(group.key)"><ChevronRight :class="{ 'is-expanded': !collapsed.has(group.key) }" /><h2>{{ group.label }}</h2><span>{{ group.total }}</span></button>
               <ul v-show="!collapsed.has(group.key)" class="wb-task-list">
-                <SidebarTaskRow v-for="occ in group.items" :key="`${occ.task.id}:${occ.date}`" :occurrence="occ" :selected="selectedKey===`${occ.task.id}:${occ.date}`" :can-move-today="group.key==='overdue'||view==='inbox'" :can-postpone="view==='today'" @open-task="emit('open-task',$event)" />
+                <SidebarTaskRow v-for="occ in group.items" :key="`${occ.task.id}:${occ.date}`" :class="{ 'is-new': justAdded===`${occ.task.id}:${occ.date}` }" :occurrence="occ" :selected="selectedKey===`${occ.task.id}:${occ.date}`" :can-move-today="group.key==='overdue'||view==='inbox'" :can-postpone="view==='today'" :drag-enabled="view==='today'||view==='upcoming'" @open-task="emit('open-task',$event)" />
               </ul>
+              <p v-if="!group.total" class="wb-group-empty" :class="{ 'is-always': view==='today' }">{{ view==='today' ? '把逾期任务拖到这里，安排到今天' : '没有任务，可以把其他日子的任务拖过来' }}</p>
             </section>
+            <section v-if="view==='today'&&listDrag.dragging.value" class="wb-task-group wb-drop-extra" :data-drop-date="addDays(store.currentDate,1)"><h2>拖到这里，推迟到明天</h2></section>
             <section v-if="done.length" class="wb-task-group wb-completed-group"><button class="wb-group-heading" :aria-expanded="showDone" @click="showDone=!showDone"><ChevronRight :class="{ 'is-expanded': showDone }" /><h2>已完成</h2><span>{{ done.length }}</span></button><ul v-show="showDone" class="wb-task-list"><SidebarTaskRow v-for="occ in limitItems(done)" :key="`${occ.task.id}:${occ.date}`" :occurrence="occ" :selected="selectedKey===`${occ.task.id}:${occ.date}`" @open-task="emit('open-task',$event)" /></ul></section>
             <button v-if="moreCount>0" class="wb-list-more" @click="showMore">显示更多，还有 {{ moreCount }} 项</button>
             <div v-if="!groups.length&&!done.length" class="wb-list-empty"><CheckCheck v-if="view==='today'||view==='completed'" /><Search v-else-if="view==='search'" /><Inbox v-else /><h2>{{ emptyText }}</h2><p v-if="view==='today'">留一点时间给自己，也可以添加新的安排。</p><p v-else-if="view==='inbox'">添加任务后，点开详情即可设置日期。</p></div>
@@ -295,6 +335,10 @@ onBeforeUnmount(()=>window.removeEventListener('keydown',onKey));
         <footer class="wb-list-footer"><template v-if="view==='today'"><span>今日已完成 {{ store.todayOccurrences.filter(o=>o.completed).length }} / {{ store.todayOccurrences.length }}</span><div class="wb-progress" role="progressbar" aria-label="今日完成进度" :aria-valuenow="progress" :aria-valuemin="0" :aria-valuemax="100"><i :style="{width:progress+'%'}" /></div></template><span v-else>{{ view==='trash'?store.recycleBinTasks.length:occurrences.length }} 项任务</span></footer>
       </template>
     </main>
+    <div v-if="notice" class="wb-notice" role="status">
+      <Check aria-hidden="true" /><span>{{ notice.text }}</span>
+      <button v-if="notice.occ" type="button" @click="emit('open-task',notice.occ);notice=null">编辑</button>
+    </div>
     <AccountDialog v-model:open="accountOpen" />
     <ImportDialog v-model:open="importOpen" />
     <NotificationDialog v-model:open="notifyOpen" />

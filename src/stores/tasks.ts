@@ -7,6 +7,9 @@ import { buildReminderSchedule, foldTimeIntoReminder } from "@/lib/reminders";
 import type { TaskBackup } from "@/lib/backup";
 
 let reminderTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** 顶层任务：清单、日历、回收站只显示这些，子任务挂在父任务下面 */
+const isTopLevel = (task: Task) => !task.parentId;
 let lastReminderCount = 0;
 let hiddenAt = 0;
 
@@ -27,12 +30,24 @@ export const useTaskStore = defineStore("tasks", {
   getters: {
     /** 未删除任务：供所有正常视图与搜索使用 */
     activeTasks(state): Task[] {
-      return state.tasks.filter((task) => !task.deletedAt);
+      return state.tasks.filter((task) => !task.deletedAt && isTopLevel(task));
+    },
+    /** 父任务 id → 未删除的子任务（按创建顺序） */
+    subtasksByParent(state): Map<number, Task[]> {
+      const map = new Map<number, Task[]>();
+      for (const task of state.tasks) {
+        if (!task.parentId || task.deletedAt) continue;
+        const list = map.get(task.parentId);
+        if (list) list.push(task);
+        else map.set(task.parentId, [task]);
+      }
+      for (const list of map.values()) list.sort((a, b) => a.id - b.id);
+      return map;
     },
     /** 今日清单（含重复任务当日实例） */
     todayOccurrences(state): Occurrence[] {
       const d = state.currentDate;
-      return expandOccurrences(state.tasks.filter((task) => !task.deletedAt), state.completions, d, d).sort(
+      return expandOccurrences(state.tasks.filter((task) => !task.deletedAt && isTopLevel(task)), state.completions, d, d).sort(
         (a, b) => b.task.priority - a.task.priority || a.task.id - b.task.id,
       );
     },
@@ -40,13 +55,13 @@ export const useTaskStore = defineStore("tasks", {
     overdueTasks(state): Task[] {
       const d = state.currentDate;
       return state.tasks
-        .filter((t) => !t.deletedAt && t.repeatRule === "none" && !t.completed && !!t.dueDate && t.dueDate < d)
+        .filter((t) => !t.deletedAt && isTopLevel(t) && t.repeatRule === "none" && !t.completed && !!t.dueDate && t.dueDate < d)
         .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
     },
     /** 收集箱：无日期的未完成事项 */
     inboxTasks(state): Task[] {
       return state.tasks
-        .filter((t) => !t.deletedAt && !t.dueDate && !t.completed)
+        .filter((t) => !t.deletedAt && isTopLevel(t) && !t.dueDate && !t.completed)
         .sort((a, b) => a.id - b.id);
     },
     /**
@@ -56,7 +71,7 @@ export const useTaskStore = defineStore("tasks", {
     streaks(state): Map<number, number> {
       const result = new Map<number, number>();
       const d = state.currentDate;
-      const recurring = state.tasks.filter((t) => !t.deletedAt && t.repeatRule !== "none" && t.dueDate && t.dueDate <= d);
+      const recurring = state.tasks.filter((t) => !t.deletedAt && isTopLevel(t) && t.repeatRule !== "none" && t.dueDate && t.dueDate <= d);
       for (const task of recurring) {
         const from = task.dueDate > addDays(d, -730) ? task.dueDate : addDays(d, -730);
         const occ = expandOccurrences([task], state.completions, from, d);
@@ -74,7 +89,7 @@ export const useTaskStore = defineStore("tasks", {
     /** 回收站：最近删除的排在最前 */
     recycleBinTasks(state): Task[] {
       return state.tasks
-        .filter((task) => !!task.deletedAt)
+        .filter((task) => !!task.deletedAt && isTopLevel(task))
         .sort((a, b) => (b.deletedAt ?? "").localeCompare(a.deletedAt ?? ""));
     },
   },
@@ -213,12 +228,12 @@ export const useTaskStore = defineStore("tasks", {
       this.operationError = "";
       try {
         await repo.deleteTask(id);
-        const index = this.tasks.findIndex((task) => task.id === id);
-        if (index >= 0) {
-          const deletedAt = new Date().toISOString();
-          this.tasks[index] = { ...this.tasks[index], deletedAt, updatedAt: deletedAt };
-          this.scheduleReminderSync();
-        }
+        // 子任务跟着父任务进回收站
+        const deletedAt = new Date().toISOString();
+        this.tasks = this.tasks.map((task) =>
+          task.id === id || task.parentId === id ? { ...task, deletedAt, updatedAt: deletedAt } : task,
+        );
+        this.scheduleReminderSync();
       } catch (error) {
         this.operationError = "删除失败，请检查网络后重试";
         throw error;
@@ -268,21 +283,15 @@ export const useTaskStore = defineStore("tasks", {
       await this.updateTask({ ...task, priority });
     },
 
-    /** 切换完成状态：非重复任务改 completed；重复任务写当日打卡 */
+    /** 切换完成状态：非重复任务改 completed；重复任务写当日打卡。完成父任务时子任务一起完成 */
     async toggleOccurrence(occ: Occurrence) {
       this.operationError = "";
       try {
-        if (occ.isVirtual) {
-          const done = !occ.completed;
-          await repo.setCompletion(occ.task.id, occ.date, done);
-          const key = completionKey(occ.task.id, occ.date);
-          const next = new Set(this.completions);
-          if (done) next.add(key);
-          else next.delete(key);
-          this.completions = next;
-          this.scheduleReminderSync();
-        } else {
-          await this.updateTask({ ...occ.task, completed: !occ.task.completed });
+        const done = !occ.completed;
+        await this.setOccurrenceDone(occ.task, occ.date, done);
+        if (done) {
+          const open = (this.subtasksByParent.get(occ.task.id) ?? []).filter((sub) => !this.isSubtaskDone(sub, occ.task, occ.date));
+          for (const sub of open) await this.setOccurrenceDone(sub, occ.date, true, occ.task);
         }
       } catch (error) {
         if (!this.operationError) this.operationError = "更新状态失败，请检查网络后重试";
@@ -290,12 +299,83 @@ export const useTaskStore = defineStore("tasks", {
       }
     },
 
+    /** 重复任务（含其子任务）按这一天打卡，其余改 completed */
+    async setOccurrenceDone(task: Task, date: string, done: boolean, parent?: Task) {
+      const recurring = (parent ?? task).repeatRule !== "none";
+      if (!recurring) {
+        const latest = this.tasks.find((t) => t.id === task.id) ?? task;
+        if (latest.completed !== done) await this.updateTask({ ...latest, completed: done });
+        return;
+      }
+      await repo.setCompletion(task.id, date, done);
+      const key = completionKey(task.id, date);
+      const next = new Set(this.completions);
+      if (done) next.add(key);
+      else next.delete(key);
+      this.completions = next;
+      this.scheduleReminderSync();
+    },
+
+    /** 子任务在父任务某次实例上的完成状态：重复父任务按天记录 */
+    isSubtaskDone(sub: Task, parent: Task, date: string): boolean {
+      return parent.repeatRule === "none" ? sub.completed : this.completions.has(completionKey(sub.id, date));
+    },
+
+    isParentDone(parent: Task, date: string): boolean {
+      return parent.repeatRule === "none" ? parent.completed : this.completions.has(completionKey(parent.id, date));
+    },
+
+    /** 勾选子任务：全部完成时父任务自动完成；取消任一子任务时父任务重新打开 */
+    async toggleSubtask(sub: Task, parentId: number, date: string) {
+      this.operationError = "";
+      const parent = this.tasks.find((t) => t.id === parentId);
+      if (!parent) return;
+      try {
+        const done = !this.isSubtaskDone(sub, parent, date);
+        await this.setOccurrenceDone(sub, date, done, parent);
+        const latestParent = this.tasks.find((t) => t.id === parentId) ?? parent;
+        const subs = this.subtasksByParent.get(parentId) ?? [];
+        const allDone = subs.every((s) => this.isSubtaskDone(s, latestParent, date));
+        const parentDone = this.isParentDone(latestParent, date);
+        if (done && allDone && !parentDone) await this.setOccurrenceDone(latestParent, date, true);
+        if (!done && parentDone) await this.setOccurrenceDone(latestParent, date, false);
+      } catch (error) {
+        if (!this.operationError) this.operationError = "更新状态失败，请检查网络后重试";
+        throw error;
+      }
+    },
+
+    /** 新加的子任务还没做，已完成的父任务随之重新打开 */
+    async addSubtask(parentId: number, title: string, date: string) {
+      this.operationError = "";
+      const parent = this.tasks.find((t) => t.id === parentId);
+      if (!parent || !title.trim()) return;
+      try {
+        const sub = await repo.createTask({
+          title: title.trim(), notes: "", dueDate: "", dueTime: "", remindOffset: null, priority: 0, tags: [],
+          repeatRule: "none", completed: false, parentId,
+        });
+        this.tasks.push(sub);
+        if (this.isParentDone(parent, date)) await this.setOccurrenceDone(parent, date, false);
+        return sub;
+      } catch (error) {
+        if (!this.operationError) this.operationError = "添加子任务失败，请检查网络后重试";
+        throw error;
+      }
+    },
+
+    /** 子任务是清单项，删除即永久删除，不进回收站 */
+    async removeSubtask(sub: Task) {
+      await this.permanentlyDeleteTask(sub.id);
+    },
+
     async restoreTask(id: number) {
       this.operationError = "";
       try {
         await repo.restoreTask(id);
-        const index = this.tasks.findIndex((task) => task.id === id);
-        if (index >= 0) this.tasks[index] = { ...this.tasks[index], deletedAt: null };
+        this.tasks = this.tasks.map((task) =>
+          task.id === id || task.parentId === id ? { ...task, deletedAt: null } : task,
+        );
         this.scheduleReminderSync();
       } catch (error) {
         this.operationError = "恢复失败，请检查网络后重试";
@@ -316,9 +396,10 @@ export const useTaskStore = defineStore("tasks", {
       this.operationError = "";
       try {
         await repo.permanentlyDeleteTask(id);
-        this.tasks = this.tasks.filter((task) => task.id !== id);
+        const removed = new Set(this.tasks.filter((t) => t.id === id || t.parentId === id).map((t) => `${t.id}:`));
+        this.tasks = this.tasks.filter((task) => task.id !== id && task.parentId !== id);
         this.scheduleReminderSync();
-        this.completions = new Set([...this.completions].filter((key) => !key.startsWith(`${id}:`)));
+        this.completions = new Set([...this.completions].filter((key) => !removed.has(key.slice(0, key.indexOf(":") + 1))));
       } catch (error) {
         this.operationError = "永久删除失败，请检查网络后重试";
         throw error;

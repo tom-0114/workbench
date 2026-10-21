@@ -9,6 +9,7 @@ import { REMIND_OFFSET_MAX, REMIND_OFFSET_MIN, reminderBase, reminderTime } from
 import { fmtDate } from "@/lib/date";
 import DateField from "@/components/DateField.vue";
 import TimeField from "@/components/TimeField.vue";
+import SubtaskList from "@/components/SubtaskList.vue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,6 +29,8 @@ const props = defineProps<{
   removing: boolean;
   confirmingDelete: boolean;
   actionError: string;
+  /** 打开的是哪一天的实例：重复任务的子任务按天勾选 */
+  occurrenceDate?: string;
 }>();
 
 const emit = defineEmits<{
@@ -112,8 +115,10 @@ const repeatOptions: Task["repeatRule"][] = [
 </script>
 
 <template>
-  <div class="flex flex-1 flex-col overflow-hidden">
-    <fieldset :disabled="saving || removing" class="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto px-6 py-4">
+  <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
+    <!-- 滚动放在外层 div：Chrome 里 fieldset 自己做滚动容器时溢出内容不裁剪，会压到底部按钮上 -->
+    <div class="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+    <fieldset :disabled="saving || removing" class="flex min-w-0 flex-col gap-4">
       <div class="wb-form-field">
         <Label for="wb-title">标题</Label>
         <Input id="wb-title" v-model="draft.title" placeholder="事项标题" @keydown.enter="onEnterKey" />
@@ -179,6 +184,11 @@ const repeatOptions: Task["repeatRule"][] = [
         </div>
       </div>
 
+      <div v-if="!draft.parentId" class="wb-form-field">
+        <Label>子任务<span class="wb-label-hint">改动即时保存</span></Label>
+        <SubtaskList :parent-id="draft.id" :date="occurrenceDate || draft.dueDate" editable />
+      </div>
+
       <div class="wb-form-field">
         <Label for="wb-tags">标签（逗号分隔）</Label>
         <Input id="wb-tags" v-model="tagsInput" placeholder="如：工作, 学习" @keydown.enter="onEnterKey" />
@@ -204,6 +214,7 @@ const repeatOptions: Task["repeatRule"][] = [
         <span v-if="completedLabel" class="text-[13px]" style="color: var(--text-secondary)">· {{ completedLabel }}</span>
       </label>
     </fieldset>
+    </div>
 
     <div
       class="flex flex-row items-center justify-between border-t px-6 py-3"

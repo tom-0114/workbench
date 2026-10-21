@@ -28,6 +28,10 @@ async function setTime(page,selector,value) { const input=page.locator(selector)
 async function save(page) { await page.getByRole('button',{name:'保存',exact:true}).click();await page.locator('#wb-title').waitFor({state:'hidden'}); }
 async function closed(page) { const cancel=page.getByRole('button',{name:'取消',exact:true});if(await cancel.isVisible())await cancel.click();await page.locator('#wb-title').waitFor({state:'hidden'}); }
 async function taskById(id) { return (await (await fetch(`http://127.0.0.1:3002/api/tasks`)).json()).find(t=>t.id===id); }
+// 新建不弹窗：回车后出现“已添加”提示，任务直接落库
+async function quickAdd(page,text) { const input=page.getByRole('textbox',{name:'添加任务',exact:true});await input.fill(text);await input.press('Enter');await page.locator('.wb-notice').filter({hasText:'已添加'}).waitFor();assert.equal(await page.locator('#wb-title').count(),0,'新建后不应弹出编辑窗');assert.equal(await input.inputValue(),''); }
+// 鼠标拖动任务行到某个分组（按住移动几像素后开始拖）
+async function dragRowTo(page,rowLocator,zoneLocator) { await rowLocator.scrollIntoViewIfNeeded();const a=await rowLocator.locator('.wb-sidebar-title').boundingBox();const b=await zoneLocator.boundingBox();await page.mouse.move(a.x+20,a.y+a.height/2);await page.mouse.down();await page.mouse.move(a.x+30,a.y+a.height/2+6,{steps:3});const box=await page.locator('.wb-task-scroll').boundingBox();let z=b;for(let i=0;i<60&&(z.y+20>box.y+box.height-60||z.y+20<box.y+60);i++){await page.mouse.move(a.x+30,z.y>box.y?box.y+box.height-8:box.y+8);await page.waitForTimeout(80);z=await zoneLocator.boundingBox();}await page.mouse.move(z.x+z.width/2,z.y+Math.min(z.height/2,24),{steps:12});await zoneLocator.and(page.locator('.is-drop-target')).waitFor();await page.mouse.up(); }
 async function waitForTask(id,predicate) { for (let i=0;i<25;i++){const t=await taskById(id);if(t&&predicate(t))return t;await new Promise(r=>setTimeout(r,200));}throw new Error(`task ${id} 未在期限内满足断言`); }
 async function waitForTaskWhere(predicate) { for (let i=0;i<25;i++){const tasks=await (await fetch(`http://127.0.0.1:3002/api/tasks`)).json();const t=tasks.find(predicate);if(t)return t;await new Promise(r=>setTimeout(r,200));}throw new Error('没有任务在期限内满足断言'); }
 async function check(name,fn) { await fn();results.push({name,result:'PASS'});console.log(`PASS ${name}`); }
@@ -40,8 +44,9 @@ try {
   await page.goto(base);await page.locator('.wb-main-pane h1').waitFor();
   await check('default list and desktop layout',async()=>{assert.equal(await page.locator('h1').textContent(),'今天');assert.equal(await page.locator('.wb-detail-panel').count(),0);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);});
   await check('add, edit, save and reload',async()=>{
-    await page.getByRole('textbox',{name:'添加任务',exact:true}).fill('验收新增任务');
-    await page.getByRole('textbox',{name:'添加任务',exact:true}).press('Enter');await page.locator('#wb-title').waitFor();
+    await quickAdd(page,'验收新增任务');
+    await page.locator('.wb-sidebar-row.is-new').filter({hasText:'验收新增任务'}).waitFor();
+    await page.locator('.wb-notice').getByRole('button',{name:'编辑'}).click();await page.locator('#wb-title').waitFor();
     await page.locator('#wb-notes').fill('刷新后应当保留的备注');await save(page);
     await page.reload();await openDetail(page,'验收新增任务');await page.locator('#wb-notes').waitFor();assert.equal(await page.locator('#wb-notes').inputValue(),'刷新后应当保留的备注');
   });
@@ -61,12 +66,12 @@ try {
     await openDetail(page,'验收新增任务');await page.locator('#wb-title').fill('失败后重试成功的任务');await fail();await page.getByRole('button',{name:'保存',exact:true}).click();await waitText(page,'没有保存成功，请检查网络后重试。');assert.equal(await page.locator('#wb-title').inputValue(),'失败后重试成功的任务');await save(page);await page.reload();await row(page,'失败后重试成功的任务');
   });
   await check('add failure retains input and avoids duplicate',async()=>{
-    const input=page.getByRole('textbox',{name:'添加任务',exact:true});await input.fill('保留新增输入');await fail();await input.press('Enter');await waitText(page,'新建失败，请检查网络后重试');assert.equal(await input.inputValue(),'保留新增输入');await input.press('Enter');await page.locator('#wb-title').waitFor();await closed(page);assert.equal(await page.getByText('保留新增输入',{exact:true}).count(),1);
+    const input=page.getByRole('textbox',{name:'添加任务',exact:true});await input.fill('保留新增输入');await fail();await input.press('Enter');await waitText(page,'新建失败，请检查网络后重试');assert.equal(await input.inputValue(),'保留新增输入');await input.press('Enter');await row(page,'保留新增输入');assert.equal(await page.getByText('保留新增输入',{exact:true}).count(),1);
   });
   await check('natural language quick add parses date',async()=>{
     const input=page.getByRole('textbox',{name:'添加任务',exact:true});await input.fill('明天交周报');
     await page.locator('.wb-parse-hint').filter({hasText:'明天'}).waitFor();
-    await input.press('Enter');await page.locator('#wb-title').waitFor();await closed(page);
+    await input.press('Enter');await page.locator('.wb-notice').filter({hasText:'已添加「交周报」到明天'}).waitFor();
     await waitForTaskWhere(t=>t.title==='交周报'&&t.dueDate===localDate(1));
   });
   await check('completion persists after reload and appears in history',async()=>{
@@ -312,7 +317,7 @@ try {
   await check('quick add turns a parsed time into a reminder',async()=>{
     const input=page.getByRole('textbox',{name:'添加任务',exact:true});await input.fill('后天下午3点 体检');
     await page.locator('.wb-parse-hint').filter({hasText:'提醒 15:00'}).waitFor();
-    await input.press('Enter');await page.locator('#wb-title').waitFor();await closed(page);
+    await input.press('Enter');await page.locator('.wb-notice').filter({hasText:'已添加'}).waitFor();
     await waitForTaskWhere(t=>t.title==='体检'&&t.dueDate===localDate(2)&&t.dueTime===''&&t.remindOffset===540-900);
   });
   await check('recurring streak badge and completed view grouped by day',async()=>{
@@ -327,6 +332,101 @@ try {
     const todayGroup=page.locator('.wb-task-group').filter({has:page.locator('h2',{hasText:/^今天$/})});
     await todayGroup.getByText('给家里买牛奶和水果',{exact:true}).waitFor();
     await page.locator('.wb-task-group').filter({has:page.locator('h2',{hasText:/^昨天$/})}).getByText('下班后跑步 30 分钟',{exact:true}).waitFor();
+  });
+  await check('today: drag overdue task onto today',async()=>{
+    await reset();await page.reload();await nav(page,'今天');
+    const overdue=await row(page,'整理昨天的会议记录');
+    const todayGroup=page.locator(`.wb-task-group[data-drop-date="${localDate(0)}"]`);
+    // 逾期分组不是落点
+    assert.equal(await page.locator('.wb-task-group.is-overdue[data-drop-date]').count(),0);
+    await dragRowTo(page,overdue,todayGroup);
+    await waitForTask(6,t=>t.dueDate===localDate(0));
+    await todayGroup.getByText('整理昨天的会议记录',{exact:true}).waitFor();
+    assert.equal(await page.locator('#wb-title').count(),0,'拖完不应打开编辑窗');
+    await page.locator('.wb-notice').filter({hasText:'已移到今天'}).waitFor();
+  });
+  await check('today: drag a task to the tomorrow slot that appears while dragging',async()=>{
+    const target=await row(page,'给家里买牛奶和水果');
+    const a=await target.locator('.wb-sidebar-title').boundingBox();
+    await page.mouse.move(a.x+20,a.y+a.height/2);await page.mouse.down();await page.mouse.move(a.x+30,a.y+a.height/2+8,{steps:3});
+    const slot=page.locator('.wb-drop-extra');await slot.waitFor();const b=await slot.boundingBox();
+    await page.mouse.move(b.x+b.width/2,b.y+b.height/2,{steps:12});await slot.and(page.locator('.is-drop-target')).waitFor();await page.mouse.up();
+    await waitForTask(5,t=>t.dueDate===localDate(1));
+    await slot.waitFor({state:'hidden'});
+  });
+  await check('upcoming: seven day groups, drag today to a later day, recurring moves once',async()=>{
+    await nav(page,'最近 7 天');
+    assert.equal(await page.locator('.wb-task-group[data-drop-date]').count(),7);
+    const r=await row(page,'和设计师确认首页修改');
+    await dragRowTo(page,r,page.locator(`.wb-task-group[data-drop-date="${localDate(3)}"]`));
+    await waitForTask(2,t=>t.dueDate===localDate(3));
+    // 重复任务只挪这一次
+    const weekly=page.locator(`.wb-task-group[data-drop-date="${localDate(0)}"] .wb-sidebar-row`).filter({has:page.getByText('写周报',{exact:true})});
+    await dragRowTo(page,weekly,page.locator(`.wb-task-group[data-drop-date="${localDate(1)}"]`));
+    const t=await waitForTask(11,t=>t.dateOverrides&&t.dateOverrides[localDate(0)]===localDate(1));assert.equal(t.dueDate,localDate(0));
+    // 同一天不是落点，松手不改
+    const before=(await taskById(1)).updatedAt;
+    const r1=await row(page,'整理本周的项目进度');await r1.scrollIntoViewIfNeeded();const own=page.locator(`.wb-task-group[data-drop-date="${localDate(0)}"]`);
+    const a=await r1.locator('.wb-sidebar-title').boundingBox();const b=await own.boundingBox();
+    await page.mouse.move(a.x+20,a.y+a.height/2);await page.mouse.down();await page.mouse.move(b.x+40,b.y+20,{steps:8});
+    assert.equal(await page.locator('.is-drop-target').count(),0);await page.mouse.up();
+    assert.equal((await taskById(1)).updatedAt,before);
+  });
+  await check('subtasks: add, linkage between parent and children, edit in dialog',async()=>{
+    await nav(page,'今天');
+    const parent=await row(page,'整理本周的项目进度');
+    await parent.getByRole('button',{name:'更多操作：整理本周的项目进度'}).click();
+    await page.getByRole('dialog',{name:'更多操作：整理本周的项目进度'}).getByRole('button',{name:'添加子任务'}).click();
+    const add=parent.getByRole('textbox',{name:'添加子任务'});await add.waitFor();
+    await add.fill('核对上线进度');await add.press('Enter');await parent.getByText('核对上线进度',{exact:true}).waitFor();
+    await add.fill('同步给团队');await add.press('Enter');await parent.getByText('同步给团队',{exact:true}).waitFor();
+    await parent.getByRole('button',{name:/子任务 0\/2/}).waitFor();
+    // 子任务不单独出现在清单里
+    assert.equal(await page.locator('.wb-task-list > .wb-sidebar-row').filter({has:page.locator('.wb-sidebar-title',{hasText:'核对上线进度'})}).count(),0);
+    const subs=(await (await fetch('http://127.0.0.1:3002/api/tasks')).json()).filter(t=>t.parentId===1);assert.equal(subs.length,2);
+    // 全部子任务完成 → 父任务自动完成
+    await parent.getByRole('checkbox',{name:'完成子任务：核对上线进度'}).click();await waitForTask(subs[0].id,t=>t.completed);
+    assert.equal((await taskById(1)).completed,false);
+    await parent.getByRole('checkbox',{name:'完成子任务：同步给团队'}).click();
+    await waitForTask(1,t=>t.completed);
+    // 取消一个子任务 → 父任务重新打开
+    const doneParent=page.locator('.wb-sidebar-row').filter({has:page.locator('.wb-sidebar-title',{hasText:'整理本周的项目进度'})});
+    await doneParent.getByRole('checkbox',{name:'取消完成子任务：同步给团队'}).click();
+    await waitForTask(1,t=>!t.completed);
+    // 完成父任务 → 子任务一起完成
+    await (await row(page,'整理本周的项目进度')).getByRole('checkbox',{name:'完成：整理本周的项目进度'}).click();
+    await waitForTask(subs[1].id,t=>t.completed);await waitForTask(1,t=>t.completed);
+    // 弹窗里改名、删除、新增；新增未完成子任务会让父任务重新打开
+    await openDetail(page,'整理本周的项目进度');
+    const dlg=page.getByRole('dialog');
+    const rename=dlg.getByRole('textbox',{name:'子任务标题：同步给团队'});await rename.fill('同步给全组');await rename.press('Enter');
+    await waitForTask(subs[1].id,t=>t.title==='同步给全组');
+    await dlg.getByRole('button',{name:'删除子任务：核对上线进度'}).click();
+    for(let i=0;i<25&&await taskById(subs[0].id);i++)await new Promise(r=>setTimeout(r,200));
+    assert.equal(await taskById(subs[0].id),undefined);
+    const add2=dlg.getByRole('textbox',{name:'添加子任务'});await add2.fill('写会议纪要');await add2.press('Enter');
+    await waitForTask(1,t=>!t.completed);
+    await closed(page);
+    // 删除父任务，子任务一起进回收站、一起恢复
+    await (await row(page,'整理本周的项目进度')).getByRole('button',{name:'更多操作：整理本周的项目进度'}).click();
+    await page.getByRole('dialog',{name:'更多操作：整理本周的项目进度'}).getByRole('button',{name:'删除事项'}).click();
+    await page.getByRole('group',{name:'确认删除'}).getByRole('button',{name:'确认'}).click();
+    await waitForTaskWhere(t=>t.parentId===1&&t.title==='写会议纪要'&&!!t.deletedAt);
+    await nav(page,'回收站');assert.equal(await page.locator('.wb-task-list').getByText('写会议纪要',{exact:true}).count(),0,'子任务不单独进回收站');
+    await (await row(page,'整理本周的项目进度')).getByRole('button',{name:/恢复/}).click();
+    await waitForTaskWhere(t=>t.parentId===1&&t.title==='写会议纪要'&&!t.deletedAt);
+  });
+  await check('subtasks on a recurring task are checked per day',async()=>{
+    await nav(page,'今天');const r=await row(page,'下班后跑步 30 分钟');
+    await r.getByRole('button',{name:'更多操作：下班后跑步 30 分钟'}).click();
+    await page.getByRole('dialog',{name:'更多操作：下班后跑步 30 分钟'}).getByRole('button',{name:'添加子任务'}).click();
+    const add=r.getByRole('textbox',{name:'添加子任务'});await add.fill('拉伸 5 分钟');await add.press('Enter');
+    await r.getByRole('checkbox',{name:'完成子任务：拉伸 5 分钟'}).click();
+    const sub=await waitForTaskWhere(t=>t.parentId===4);
+    const comps=async()=>await (await fetch('http://127.0.0.1:3002/api/completions')).json();
+    for(let i=0;i<25&&!(await comps()).includes(`4:${localDate(0)}`);i++)await new Promise(r=>setTimeout(r,200));
+    const c=await comps();assert.ok(c.includes(`${sub.id}:${localDate(0)}`));assert.ok(c.includes(`4:${localDate(0)}`),'唯一的子任务完成后父任务当天打卡');
+    assert.equal((await taskById(sub.id)).completed,false,'重复任务的子任务按天记录，不改 completed');
   });
   await check('import backup validates file and replaces data',async()=>{
     const openImport=async()=>{await page.getByRole('button',{name:'设置'}).click();await page.getByRole('button',{name:'导入备份'}).click();await page.getByRole('dialog',{name:'导入备份'}).waitFor();};
@@ -383,7 +483,7 @@ try {
   const m=await mobileContext.newPage();await m.goto(base);await m.locator('h1').waitFor();
   activePage=m;m.setDefaultTimeout(10000);
   await check('mobile navigation, inbox add and bottom sheet',async()=>{
-    assert.equal(await m.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await nav(m,'收集箱');await m.getByRole('textbox',{name:'添加任务',exact:true}).fill('手机收集箱任务');await m.getByRole('textbox',{name:'添加任务',exact:true}).press('Enter');await m.locator('[data-slot="sheet-content"]').waitFor();assert.equal(await m.locator('#wb-date').inputValue(),'');await m.locator('#wb-notes').fill('手机备注');await save(m);await m.reload();await nav(m,'收集箱');await openDetail(m,'手机收集箱任务');await m.locator('#wb-notes').waitFor();assert.equal(await m.locator('#wb-notes').inputValue(),'手机备注');await closed(m);
+    assert.equal(await m.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await nav(m,'收集箱');await m.getByRole('textbox',{name:'添加任务',exact:true}).fill('手机收集箱任务');await m.getByRole('textbox',{name:'添加任务',exact:true}).press('Enter');await openDetail(m,'手机收集箱任务');await m.locator('[data-slot="sheet-content"]').waitFor();assert.equal(await m.locator('#wb-date').inputValue(),'');await m.locator('#wb-notes').fill('手机备注');await save(m);await m.reload();await nav(m,'收集箱');await openDetail(m,'手机收集箱任务');await m.locator('#wb-notes').waitFor();assert.equal(await m.locator('#wb-notes').inputValue(),'手机备注');await closed(m);
   });
   await check('mobile task menu remains accessible',async()=>{const r=await row(m,'手机收集箱任务');await r.getByRole('button',{name:'更多操作：手机收集箱任务'}).click();await m.getByRole('button',{name:'移到今天',exact:true}).click();await r.waitFor({state:'hidden'});await nav(m,'今天');await row(m,'手机收集箱任务');});
   await check('mobile quick date and priority',async()=>{
@@ -398,6 +498,23 @@ try {
     const sheet=m.locator('.wb-inbox-sheet');await sheet.waitFor();
     const item=sheet.locator('li').filter({hasText:'预约周末的口腔检查'});await item.getByRole('button',{name:'明天',exact:true}).click();
     await waitForTask(7,t=>t.dueDate===localDate(1));
+  });
+  await check('mobile long-press drags a task to another day',async()=>{
+    await m.reload();await nav(m,'最近 7 天');const r=await row(m,'读完《纳瓦尔宝典》第三章');
+    const zone=m.locator(`.wb-task-group[data-drop-date="${localDate(2)}"]`);await r.scrollIntoViewIfNeeded();
+    const a=await r.locator('.wb-sidebar-title').boundingBox();
+    const cdp=await mobileContext.newCDPSession(m);const x=a.x+30,y=a.y+a.height/2;
+    // 长按约 0.35 秒后才进入拖动；目标在屏幕下方时停在底边让列表自动滚动
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});
+    await new Promise(r=>setTimeout(r,500));
+    await m.locator('.wb-drag-ghost').waitFor();
+    const bottom=(await m.locator('.wb-task-scroll').boundingBox());const edge=bottom.y+bottom.height-6;
+    let b=await zone.boundingBox();
+    for(let i=0;i<60&&b.y+30>edge-60;i++){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y:edge}]});await new Promise(r=>setTimeout(r,60));b=await zone.boundingBox();}
+    for(let i=1;i<=6;i++)await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y:edge+(b.y+20-edge)*i/6}]});
+    await zone.and(m.locator('.is-drop-target')).waitFor();
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+    await waitForTask(3,t=>t.dueDate===localDate(2));
   });
   await mobileContext.close();
   await mkdir('docs/ui-redesign',{recursive:true});

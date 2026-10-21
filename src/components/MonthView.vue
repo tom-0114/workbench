@@ -322,6 +322,16 @@ const options = computed<CalendarOptions>(() => ({
     title.textContent = o.task.title;
     content.append(title);
 
+    const subs = store.subtasksByParent.get(o.task.id);
+    if (subs?.length && !compactMonthGrid) {
+      const done = subs.filter((sub) => store.isSubtaskDone(sub, o.task, o.date)).length;
+      const chip = document.createElement("span");
+      chip.className = "wb-event-subs";
+      chip.textContent = `${done}/${subs.length}`;
+      chip.setAttribute("aria-label", `子任务完成 ${done}/${subs.length}`);
+      content.append(chip);
+    }
+
     // 提醒时间放在标题后面，标题过长时被省略的是标题而不是提醒
     const remind = o.completed ? "" : reminderLabel(o.task, o.date, store.currentDate);
     if (remind) {

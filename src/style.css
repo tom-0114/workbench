@@ -1847,3 +1847,69 @@ body [data-slot="dialog-overlay"] {
 .wb-remind-add svg { width:14px; height:14px; }
 .wb-remind-add:hover:not(:disabled) { border-color:var(--accent-color); color:var(--accent-color); }
 .wb-remind-add:disabled { opacity:.55; cursor:not-allowed; }
+
+/* =========================================================
+   清单拖动改期
+   ========================================================= */
+.wb-main-pane .wb-sidebar-row[data-drag] { -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; }
+@media (pointer:fine) { .wb-main-pane .wb-sidebar-row[data-drag] .wb-sidebar-title { cursor:grab; } }
+body.wb-list-dragging, body.wb-list-dragging * { cursor:grabbing !important; user-select:none !important; }
+.wb-main-pane .wb-sidebar-row.wb-drag-ghost { position:fixed; z-index:90; margin:0; pointer-events:none; list-style:none; background:var(--bg-primary); border:1px solid var(--border); border-radius:8px; box-shadow:0 10px 28px rgba(15,23,42,.18); opacity:.96; transform:rotate(.6deg); }
+.wb-main-pane .wb-sidebar-row.is-drag-source { opacity:.35; }
+.wb-task-group[data-drop-date] { border-radius:10px; transition:background 120ms, box-shadow 120ms; }
+.wb-task-scroll.is-dragging .wb-task-group[data-drop-date] { box-shadow:inset 0 0 0 1px var(--border-subtle); }
+.wb-task-group.is-drop-target { background:color-mix(in srgb, var(--accent-color) 9%, transparent); box-shadow:inset 0 0 0 2px color-mix(in srgb, var(--accent-color) 55%, transparent) !important; }
+.wb-group-empty { margin:0 12px 4px 34px; padding:6px 0; color:var(--text-tertiary); font-size:13px; }
+.wb-task-group.is-empty-day { margin-bottom:8px; }
+.wb-task-group.is-empty-day .wb-group-heading { color:var(--text-tertiary); }
+/* 最近 7 天里的空日子平时只留标题，拖动时才提示可以放 */
+.wb-task-scroll:not(.is-dragging) .wb-group-empty:not(.is-always) { display:none; }
+.wb-drop-extra { display:grid; place-items:center; min-height:64px; margin-top:4px; border:1.5px dashed color-mix(in srgb, var(--accent-color) 45%, var(--border)); }
+.wb-drop-extra h2 { color:var(--text-secondary); font-size:13px; font-weight:500; }
+.wb-main-pane .wb-sidebar-row.is-new { animation:wb-new-row 1.6s ease-out; }
+@keyframes wb-new-row { 0%,40% { background:color-mix(in srgb, var(--accent-color) 14%, transparent); } 100% { background:transparent; } }
+
+/* 新建后的轻提示 */
+.wb-notice { position:fixed; z-index:70; left:50%; bottom:max(24px, env(safe-area-inset-bottom)); transform:translateX(-50%); display:flex; align-items:center; gap:10px; max-width:min(520px, calc(100vw - 32px)); padding:9px 10px 9px 14px; border-radius:10px; background:var(--text-primary); color:var(--bg-primary); font-size:13px; box-shadow:0 8px 24px rgba(0,0,0,.18); animation:wb-list-enter 180ms ease-out; }
+.wb-notice svg { width:15px; height:15px; flex:none; }
+.wb-notice span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.wb-notice button { flex:none; padding:3px 10px; border-radius:6px; color:inherit; font-weight:600; background:color-mix(in srgb, var(--bg-primary) 16%, transparent); }
+.wb-notice button:hover { background:color-mix(in srgb, var(--bg-primary) 26%, transparent); }
+
+/* =========================================================
+   子任务
+   ========================================================= */
+.wb-row-subs { grid-column:2; grid-row:2; justify-self:start; display:inline-flex; align-items:center; gap:4px; margin-top:-8px; padding:2px 7px; border-radius:5px; color:var(--text-secondary); font-size:12px; font-variant-numeric:tabular-nums; }
+.wb-row-subs svg { width:13px; height:13px; }
+.wb-row-subs:hover { background:var(--hover); color:var(--text-primary); }
+.wb-row-subs.is-all-done { color:var(--accent-color); }
+.wb-main-pane .wb-sidebar-row > .wb-row-subtasks { grid-column:2 / -1; grid-row:3; margin-top:-6px; }
+.wb-main-pane .wb-sidebar-row:not(:has(.wb-row-subs)) > .wb-row-subtasks { grid-row:2; }
+.wb-subtasks { display:flex; flex-direction:column; gap:2px; }
+.wb-subtask-items { display:flex; flex-direction:column; gap:1px; }
+.wb-subtask { display:flex; align-items:center; gap:9px; min-height:30px; padding:2px 6px; border-radius:6px; }
+.wb-subtask:hover { background:var(--hover); }
+.wb-subtask-check { display:grid; flex:none; width:15px; height:15px; place-items:center; border:1.5px solid var(--text-tertiary); border-radius:4px; color:transparent; font-size:10px; line-height:1; }
+.wb-subtask.is-done .wb-subtask-check { background:var(--accent-color); border-color:var(--accent-color); color:#fff; }
+.wb-subtask-title, .wb-subtask-input { flex:1; min-width:0; padding:2px 0; border:none; background:transparent; color:var(--text-primary); font-size:13px; text-align:left; outline:none; overflow-wrap:anywhere; }
+.wb-subtask-input:focus { box-shadow:0 1px 0 var(--accent-color); }
+.wb-subtask.is-done .wb-subtask-title, .wb-subtask.is-done .wb-subtask-input { color:var(--text-tertiary); text-decoration:line-through; }
+.wb-subtask-remove { display:grid; flex:none; width:24px; height:24px; place-items:center; border-radius:5px; color:var(--text-tertiary); opacity:0; }
+.wb-subtask:hover .wb-subtask-remove, .wb-subtask-remove:focus-visible { opacity:1; }
+.wb-subtask-remove:hover { background:var(--hover); color:var(--destructive); }
+.wb-subtask-remove svg { width:14px; height:14px; }
+.wb-subtask-add { display:flex; align-items:center; gap:9px; min-height:30px; padding:2px 6px; color:var(--text-tertiary); }
+.wb-subtask-add svg { width:15px; height:15px; flex:none; }
+.wb-subtask-add input { flex:1; min-width:0; border:none; background:transparent; color:var(--text-primary); font-size:13px; outline:none; }
+.wb-subtasks.is-editable { padding:4px 0; border:1px solid var(--border); border-radius:8px; }
+.wb-subtasks.is-editable .wb-subtask, .wb-subtasks.is-editable .wb-subtask-add { padding-inline:10px; }
+.wb-label-hint { margin-left:8px; color:var(--text-tertiary); font-size:12px; font-weight:400; }
+.wb-event .wb-event-subs { flex:none; color:var(--text-tertiary); font-size:11px; font-variant-numeric:tabular-nums; }
+@media (hover:none) { .wb-subtask-remove { opacity:1; } }
+@media (max-width:767px) {
+  .wb-row-subs { grid-row:3; margin-top:-4px; }
+  .wb-main-pane .wb-sidebar-row > .wb-row-subtasks { grid-row:4; }
+  .wb-main-pane .wb-sidebar-row:not(:has(.wb-row-subs)) > .wb-row-subtasks { grid-row:3; }
+  .wb-subtask, .wb-subtask-add { min-height:38px; }
+  .wb-subtask-add input, .wb-subtask-input { font-size:16px; }
+}

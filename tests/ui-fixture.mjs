@@ -39,7 +39,7 @@ http.createServer(async(req,res)=>{
   if(path==='/api/tasks'&&req.method==='GET')return json(200,tasks);
   if(path==='/api/completions'&&req.method==='GET')return json(200,completions);
   if(failNext&&req.method!=='GET'){failNext=false;return json(503,{error:'Fixture save failure'});}
-  if(path==='/api/tasks'&&req.method==='POST'){const task={dueTime:'',remindOffset:null,completedAt:null,...body,id:Math.max(0,...tasks.map(t=>t.id))+1,deletedAt:null,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};tasks.push(task);return json(200,task);}
+  if(path==='/api/tasks'&&req.method==='POST'){const task={dueTime:'',remindOffset:null,completedAt:null,parentId:null,...body,...(body.parentId?{dueDate:'',repeatRule:'none'}:{}),id:Math.max(0,...tasks.map(t=>t.id))+1,deletedAt:null,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};tasks.push(task);return json(200,task);}
   if(path==='/api/reminders'&&req.method==='PUT'){reminders=body.reminders;return json(200,{count:reminders.length});}
   if(path==='/api/push/config')return json(200,{enabled:false});
   if(path==='/api/import'&&req.method==='POST'){
@@ -51,6 +51,6 @@ http.createServer(async(req,res)=>{
   }
   if(path==='/api/completions'&&req.method==='POST'){const key=`${body.taskId}:${body.date}`;completions=completions.filter(k=>k!==key);if(body.done)completions.push(key);return json(200,{ok:true});}
   const match=path.match(/^\/api\/tasks\/(\d+)(?:\/(restore|permanent))?$/);
-  if(match){const id=Number(match[1]);const task=tasks.find(t=>t.id===id);if(!task)return json(404,{});if(req.method==='PUT'){Object.assign(task,body,{id,updatedAt:new Date().toISOString()});return json(200,task);}if(req.method==='DELETE'){if(match[2]==='permanent')tasks=tasks.filter(t=>t.id!==id);else task.deletedAt=new Date().toISOString();}if(match[2]==='restore')task.deletedAt=null;return json(200,{ok:true});}
+  if(match){const id=Number(match[1]);const task=tasks.find(t=>t.id===id);if(!task)return json(404,{});if(req.method==='PUT'){Object.assign(task,body,{id,updatedAt:new Date().toISOString()});return json(200,task);}const family=t=>t.id===id||t.parentId===id;if(req.method==='DELETE'){if(match[2]==='permanent')tasks=tasks.filter(t=>!family(t));else{const at=new Date().toISOString();tasks.filter(family).forEach(t=>t.deletedAt=at);}}if(match[2]==='restore')tasks.filter(family).forEach(t=>t.deletedAt=null);return json(200,{ok:true});}
   return json(404,{error:'Unsupported fixture request'});
 }).listen(Number(process.env.WORKBENCH_UI_FIXTURE_PORT || 3002),'127.0.0.1',()=>console.log(`UI test fixture: http://127.0.0.1:${process.env.WORKBENCH_UI_FIXTURE_PORT || 3002} (in-memory data only)`));

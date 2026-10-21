@@ -82,6 +82,9 @@ ALTER TABLE tasks ADD COLUMN IF NOT EXISTS date_overrides JSONB NOT NULL DEFAULT
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_time TEXT NOT NULL DEFAULT '';
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS remind_offset INTEGER;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completed_at TEXT;
+-- 子任务只有一层：parent_id 指向顶层任务，子任务没有日期，跟随父任务删除、恢复
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS parent_id BIGINT;
+CREATE INDEX IF NOT EXISTS tasks_parent_id_idx ON tasks (parent_id) WHERE parent_id IS NOT NULL;
 CREATE TABLE IF NOT EXISTS push_subscriptions (
   id         BIGSERIAL PRIMARY KEY,
   user_id    BIGINT NOT NULL,
@@ -253,6 +256,7 @@ function rowToTask(r) {
     repeatRule: r.repeat_rule,
     completed: !!r.completed,
     completedAt: r.completed_at ?? null,
+    parentId: r.parent_id == null ? null : Number(r.parent_id),
     dateOverrides: r.date_overrides ?? {},
     deletedAt: r.deleted_at ?? null,
     createdAt: r.created_at,
@@ -289,25 +293,38 @@ function taskExtras(input) {
   return { dueTime, remindOffset, completedAt };
 }
 
-async function createTask(userId, input) {
+/** 子任务的父任务必须是本人未删除的顶层任务；不合法返回 null */
+async function validParentId(userId, parentId) {
+  if (!Number.isInteger(parentId)) return null;
+  const { rows } = await pool.query(
+    "SELECT id FROM tasks WHERE id=$1 AND user_id=$2 AND parent_id IS NULL AND deleted_at IS NULL",
+    [parentId, userId],
+  );
+  return rows.length ? parentId : null;
+}
+
+async function createTask(userId, input, parentId = null) {
   const now = new Date().toISOString();
-  const extras = taskExtras(input);
+  // 子任务没有日期、重复和提醒，这些都跟着父任务走
+  const task = parentId ? { ...input, dueDate: "", dueTime: "", remindOffset: null, repeatRule: "none" } : input;
+  const extras = taskExtras(task);
   const { rows } = await pool.query(
     `INSERT INTO tasks (user_id, title, notes, due_date, due_time, remind_offset, priority, tags, repeat_rule,
-       completed, completed_at, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12, $13) RETURNING *`,
+       completed, completed_at, parent_id, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12, $13, $14) RETURNING *`,
     [
       userId,
-      input.title,
-      input.notes ?? "",
-      input.dueDate,
+      task.title,
+      task.notes ?? "",
+      task.dueDate ?? "",
       extras.dueTime,
       extras.remindOffset,
-      input.priority ?? 0,
-      JSON.stringify(input.tags ?? []),
-      input.repeatRule ?? "none",
-      !!input.completed,
+      task.priority ?? 0,
+      JSON.stringify(task.tags ?? []),
+      task.repeatRule ?? "none",
+      !!task.completed,
       extras.completedAt,
+      parentId,
       now,
       now,
     ],
@@ -345,7 +362,7 @@ async function updateTask(userId, task) {
 async function deleteTask(userId, id) {
   const now = new Date().toISOString();
   const { rowCount } = await pool.query(
-    "UPDATE tasks SET deleted_at=$1, updated_at=$1 WHERE id=$2 AND user_id=$3",
+    "UPDATE tasks SET deleted_at=$1, updated_at=$1 WHERE (id=$2 OR parent_id=$2) AND user_id=$3",
     [now, id, userId],
   );
   return rowCount > 0;
@@ -353,7 +370,7 @@ async function deleteTask(userId, id) {
 
 async function restoreTask(userId, id) {
   const { rowCount } = await pool.query(
-    "UPDATE tasks SET deleted_at=NULL, updated_at=$1 WHERE id=$2 AND user_id=$3",
+    "UPDATE tasks SET deleted_at=NULL, updated_at=$1 WHERE (id=$2 OR parent_id=$2) AND user_id=$3",
     [new Date().toISOString(), id, userId],
   );
   return rowCount > 0;
@@ -361,12 +378,16 @@ async function restoreTask(userId, id) {
 
 async function permanentlyDeleteTask(userId, id) {
   return withTransaction(async (client) => {
-    const { rowCount } = await client.query("DELETE FROM tasks WHERE id=$1 AND user_id=$2", [id, userId]);
-    if (rowCount > 0) {
-      await client.query("DELETE FROM task_completions WHERE task_id=$1", [id]);
-      await client.query("DELETE FROM reminders WHERE task_id=$1", [id]);
+    const { rows } = await client.query(
+      "DELETE FROM tasks WHERE (id=$1 OR parent_id=$1) AND user_id=$2 RETURNING id",
+      [id, userId],
+    );
+    const ids = rows.map((r) => r.id);
+    if (ids.length) {
+      await client.query("DELETE FROM task_completions WHERE task_id = ANY($1::bigint[])", [ids]);
+      await client.query("DELETE FROM reminders WHERE task_id = ANY($1::bigint[])", [ids]);
     }
-    return rowCount > 0;
+    return ids.length > 0;
   });
 }
 
@@ -400,10 +421,20 @@ async function completeOccurrence(userId, taskId, date) {
     userId,
   ]);
   if (!rows.length) return false;
-  if (rows[0].repeat_rule !== "none") return setCompletion(userId, taskId, date, true);
+  // 完成父任务同时完成它的子任务；重复任务按这一天打卡
+  if (rows[0].repeat_rule !== "none") {
+    await pool.query(
+      `INSERT INTO task_completions (task_id, date)
+       SELECT id, $3 FROM tasks WHERE (id=$1 OR parent_id=$1) AND user_id=$2 AND deleted_at IS NULL
+       ON CONFLICT DO NOTHING`,
+      [taskId, userId, date],
+    );
+    return true;
+  }
   const now = new Date().toISOString();
   await pool.query(
-    "UPDATE tasks SET completed = true, completed_at = COALESCE(completed_at, $1), updated_at = $1 WHERE id = $2 AND user_id = $3",
+    `UPDATE tasks SET completed = true, completed_at = COALESCE(completed_at, $1), updated_at = $1
+     WHERE (id = $2 OR parent_id = $2) AND user_id = $3 AND NOT completed`,
     [now, taskId, userId],
   );
   return true;
@@ -435,6 +466,7 @@ function parseBackup(body) {
       repeatRule: REPEAT_RULES.has(t.repeatRule) && t.dueDate ? t.repeatRule : "none",
       dateOverrides: t.dateOverrides && typeof t.dateOverrides === "object" ? t.dateOverrides : {},
       deletedAt: t.deletedAt ? validIso(t.deletedAt) : null,
+      parentId: Number.isInteger(t.parentId) ? t.parentId : null,
       createdAt: validIso(t.createdAt) ?? now,
       updatedAt: validIso(t.updatedAt) ?? now,
     });
@@ -457,16 +489,19 @@ async function importBackup(userId, { tasks, completions }) {
     await client.query("DELETE FROM reminders WHERE user_id = $1", [userId]);
     await client.query("DELETE FROM tasks WHERE user_id = $1", [userId]);
     const idMap = new Map();
-    for (const t of tasks) {
+    // 先建顶层任务，子任务才能映射到新的父任务 id；找不到父任务的子任务退回顶层
+    const ordered = [...tasks.filter((t) => t.parentId == null), ...tasks.filter((t) => t.parentId != null)];
+    for (const t of ordered) {
       const extras = taskExtras(t);
+      const parentId = t.parentId != null ? (idMap.get(t.parentId) ?? null) : null;
       const { rows } = await client.query(
         `INSERT INTO tasks (user_id, title, notes, due_date, due_time, remind_offset, priority, tags, repeat_rule,
-           completed, completed_at, date_overrides, deleted_at, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12::jsonb, $13, $14, $15) RETURNING id`,
+           completed, completed_at, date_overrides, deleted_at, parent_id, created_at, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12::jsonb, $13, $14, $15, $16) RETURNING id`,
         [
           userId, t.title, t.notes, t.dueDate, extras.dueTime, extras.remindOffset, t.priority,
           JSON.stringify(t.tags), t.repeatRule, !!t.completed, extras.completedAt,
-          JSON.stringify(t.dateOverrides), t.deletedAt, t.createdAt, t.updatedAt,
+          JSON.stringify(t.dateOverrides), t.deletedAt, parentId, t.createdAt, t.updatedAt,
         ],
       );
       idMap.set(t.id, rows[0].id);
@@ -831,7 +866,11 @@ const server = createServer(async (req, res) => {
 
     if (path === "/api/tasks" && method === "GET") return json(res, 200, await listTasks(uid));
     if (path === "/api/tasks" && method === "POST") {
-      return json(res, 201, await createTask(uid, await readBody(req)));
+      const body = await readBody(req);
+      if (body.parentId == null) return json(res, 201, await createTask(uid, body));
+      const parentId = await validParentId(uid, body.parentId);
+      if (!parentId) return json(res, 400, { error: "父任务不存在或本身是子任务" });
+      return json(res, 201, await createTask(uid, body, parentId));
     }
     const taskMatch = path.match(/^\/api\/tasks\/(\d+)$/);
     if (taskMatch && method === "PUT") {
