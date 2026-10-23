@@ -156,7 +156,7 @@ watch(
 
 async function onQuickCreate(
   title: string,
-  applied?: { dueDate?: string; repeatRule?: RepeatRule; dueTime?: string },
+  applied?: { dueDate?: string; repeatRule?: RepeatRule; repeatUntil?: string; dueTime?: string },
 ) {
   if (!quickAdd.value || quickAdding.value) return;
   quickAdding.value = true;
@@ -166,6 +166,7 @@ async function onQuickCreate(
       dueDate: applied?.dueDate ?? quickAdd.value.date,
       dueTime: applied?.dueTime ?? "",
       repeatRule: applied?.repeatRule ?? "none",
+      repeatUntil: applied?.repeatUntil ?? "",
     });
     quickAdd.value = null;
   } catch {

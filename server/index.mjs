@@ -82,6 +82,8 @@ ALTER TABLE tasks ADD COLUMN IF NOT EXISTS date_overrides JSONB NOT NULL DEFAULT
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS due_time TEXT NOT NULL DEFAULT '';
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS remind_offset INTEGER;
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS completed_at TEXT;
+-- 重复截止日（含当天），空串表示一直重复
+ALTER TABLE tasks ADD COLUMN IF NOT EXISTS repeat_until TEXT NOT NULL DEFAULT '';
 -- 子任务只有一层：parent_id 指向顶层任务，子任务没有日期，跟随父任务删除、恢复
 ALTER TABLE tasks ADD COLUMN IF NOT EXISTS parent_id BIGINT;
 CREATE INDEX IF NOT EXISTS tasks_parent_id_idx ON tasks (parent_id) WHERE parent_id IS NOT NULL;
@@ -254,6 +256,7 @@ function rowToTask(r) {
     priority: r.priority,
     tags: r.tags ?? [],
     repeatRule: r.repeat_rule,
+    repeatUntil: r.repeat_until ?? "",
     completed: !!r.completed,
     completedAt: r.completed_at ?? null,
     parentId: r.parent_id == null ? null : Number(r.parent_id),
@@ -290,7 +293,12 @@ function taskExtras(input) {
       ? offset
       : null;
   const completedAt = input.completed ? validIso(input.completedAt) : null;
-  return { dueTime, remindOffset, completedAt };
+  // 截止日只对重复任务有意义，且不能早于开始日期
+  const repeatUntil =
+    input.repeatRule && input.repeatRule !== "none" && DATE_RE.test(input.repeatUntil ?? "") && input.repeatUntil >= input.dueDate
+      ? input.repeatUntil
+      : "";
+  return { dueTime, remindOffset, completedAt, repeatUntil };
 }
 
 /** 子任务的父任务必须是本人未删除的顶层任务；不合法返回 null */
@@ -310,8 +318,8 @@ async function createTask(userId, input, parentId = null) {
   const extras = taskExtras(task);
   const { rows } = await pool.query(
     `INSERT INTO tasks (user_id, title, notes, due_date, due_time, remind_offset, priority, tags, repeat_rule,
-       completed, completed_at, parent_id, created_at, updated_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12, $13, $14) RETURNING *`,
+       completed, completed_at, parent_id, created_at, updated_at, repeat_until)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12, $13, $14, $15) RETURNING *`,
     [
       userId,
       task.title,
@@ -327,6 +335,7 @@ async function createTask(userId, input, parentId = null) {
       parentId,
       now,
       now,
+      extras.repeatUntil,
     ],
   );
   return rowToTask(rows[0]);
@@ -337,7 +346,7 @@ async function updateTask(userId, task) {
   const extras = taskExtras(task);
   const { rows } = await pool.query(
     `UPDATE tasks SET title=$1, notes=$2, due_date=$3, due_time=$4, remind_offset=$5, priority=$6, tags=$7::jsonb,
-       repeat_rule=$8, completed=$9, completed_at=$10, date_overrides=$11::jsonb, updated_at=$12
+       repeat_rule=$8, completed=$9, completed_at=$10, date_overrides=$11::jsonb, updated_at=$12, repeat_until=$15
      WHERE id=$13 AND user_id=$14 RETURNING *`,
     [
       task.title,
@@ -354,6 +363,7 @@ async function updateTask(userId, task) {
       new Date().toISOString(),
       task.id,
       userId,
+      extras.repeatUntil,
     ],
   );
   return rows[0] ? rowToTask(rows[0]) : null;
@@ -496,12 +506,12 @@ async function importBackup(userId, { tasks, completions }) {
       const parentId = t.parentId != null ? (idMap.get(t.parentId) ?? null) : null;
       const { rows } = await client.query(
         `INSERT INTO tasks (user_id, title, notes, due_date, due_time, remind_offset, priority, tags, repeat_rule,
-           completed, completed_at, date_overrides, deleted_at, parent_id, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12::jsonb, $13, $14, $15, $16) RETURNING id`,
+           completed, completed_at, date_overrides, deleted_at, parent_id, created_at, updated_at, repeat_until)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10, $11, $12::jsonb, $13, $14, $15, $16, $17) RETURNING id`,
         [
           userId, t.title, t.notes, t.dueDate, extras.dueTime, extras.remindOffset, t.priority,
           JSON.stringify(t.tags), t.repeatRule, !!t.completed, extras.completedAt,
-          JSON.stringify(t.dateOverrides), t.deletedAt, parentId, t.createdAt, t.updatedAt,
+          JSON.stringify(t.dateOverrides), t.deletedAt, parentId, t.createdAt, t.updatedAt, extras.repeatUntil,
         ],
       );
       idMap.set(t.id, rows[0].id);

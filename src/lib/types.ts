@@ -14,6 +14,8 @@ export interface Task {
   priority: Priority;
   tags: string[];
   repeatRule: RepeatRule;
+  /** 重复截止日（含当天），空串或缺省表示一直重复 */
+  repeatUntil?: string;
   completed: boolean; // 仅非重复任务使用
   completedAt: string | null; // 非重复任务的完成时间；旧数据为空
   /** 重复任务的单次改期例外：锚点展开日期 -> 新日期；空串表示该次不出现 */

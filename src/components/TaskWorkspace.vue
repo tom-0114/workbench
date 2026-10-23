@@ -221,7 +221,7 @@ async function addTask() {
   addBusy.value=true;
   try {
     // 只写了时间没写日期，按今天处理
-    const task=await store.addTask({title:p.title,dueDate:p.dueDate??(p.dueTime||['today','upcoming'].includes(view.value)?store.currentDate:''),dueTime:p.dueTime??'',repeatRule:p.repeatRule??'none',tags:view.value==='tag'?[activeTag.value]:[]});
+    const task=await store.addTask({title:p.title,dueDate:p.dueDate??(p.dueTime||['today','upcoming'].includes(view.value)?store.currentDate:''),dueTime:p.dueTime??'',repeatRule:p.repeatRule??'none',repeatUntil:p.repeatUntil??'',tags:view.value==='tag'?[activeTag.value]:[]});
     titleInput.value='';
     // 直接创建不弹窗；落到当前清单之外（如写了“明天”）时在提示里说明去向
     const occ=toOcc(task);

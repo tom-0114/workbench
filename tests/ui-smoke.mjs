@@ -205,6 +205,24 @@ try {
     // 恢复为每周，避免影响后续用例
     await fetch('http://127.0.0.1:3002/api/tasks/11',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({...await taskById(11),repeatRule:'weekly'})});
   });
+  await check('repeat until ends the series and one day completes alone',async()=>{
+    const title='下班后跑步 30 分钟';
+    await nav(page,'今天');await openDetail(page,title);
+    await pickDate(page,page.locator('#wb-repeat-until'),localDate(2));
+    await page.getByText('到这天为止，共 3 次',{exact:true}).waitFor();
+    await page.getByRole('checkbox',{name:/这一次已完成/}).check();
+    for(let i=0;!(await (await fetch('http://127.0.0.1:3002/api/completions')).json()).includes(`4:${localDate(0)}`);i++){assert.ok(i<25,'单次完成未写入');await new Promise(r=>setTimeout(r,200));}
+    await save(page);
+    await waitForTask(4,t=>t.repeatUntil===localDate(2));
+    await nav(page,'最近 7 天');
+    const inDay=offset=>page.locator(`.wb-task-group[data-drop-date="${localDate(offset)}"]`).filter({hasText:title});
+    await inDay(2).waitFor();
+    assert.equal(await inDay(0).count(),0,'今天这次已完成，不在待办里');
+    assert.equal(await inDay(3).count(),0,'截止日之后不再出现');
+    await fetch('http://127.0.0.1:3002/api/tasks/4',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({...await taskById(4),repeatUntil:''})});
+    await fetch('http://127.0.0.1:3002/api/completions',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({taskId:4,date:localDate(0),done:false})});
+    await page.reload();await page.locator('.wb-main-pane h1').waitFor();
+  });
   await check('keyboard shortcuts navigate and focus',async()=>{
     await nav(page,'最近 7 天');
     await page.keyboard.press('n');

@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import type { NewTask, Occurrence, Task } from "@/lib/types";
 import { taskRepo as repo } from "@/lib/repo";
 import { completionKey, expandOccurrences } from "@/lib/recurrence";
-import { addDays, nowIso, today } from "@/lib/date";
+import { addDays, nowIso, parseDate, today } from "@/lib/date";
 import { buildReminderSchedule, foldTimeIntoReminder } from "@/lib/reminders";
 import type { TaskBackup } from "@/lib/backup";
 
@@ -214,6 +214,7 @@ export const useTaskStore = defineStore("tasks", {
           next.dueTime = "";
           next.remindOffset = null;
         }
+        if (next.repeatRule === "none") next.repeatUntil = "";
         const saved = await repo.updateTask(next);
         const i = this.tasks.findIndex((t) => t.id === task.id);
         if (i >= 0) this.tasks[i] = saved?.id === next.id ? saved : next;
@@ -273,7 +274,13 @@ export const useTaskStore = defineStore("tasks", {
         return;
       }
       if (newDate === task.dueDate) return;
-      await this.updateTask({ ...task, dueDate: newDate, dateOverrides: {} });
+      // 截止日跟着平移，保持系列的跨度不变
+      let repeatUntil = task.repeatUntil ?? "";
+      if (repeatUntil && task.dueDate && newDate) {
+        const shift = Math.round((parseDate(newDate).getTime() - parseDate(task.dueDate).getTime()) / 86_400_000);
+        repeatUntil = addDays(repeatUntil, shift);
+      }
+      await this.updateTask({ ...task, dueDate: newDate, repeatUntil, dateOverrides: {} });
     },
 
     /** 行内快捷调整优先级（0-3） */

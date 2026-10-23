@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref } from "vue";
+import dayjs from "dayjs";
 import { Bell, Flame, LoaderCircle, X } from "lucide-vue-next";
 import type { Task } from "@/lib/types";
 import { PRIORITY_LABELS, REPEAT_LABELS } from "@/lib/types";
@@ -7,6 +8,7 @@ import { useTaskStore } from "@/stores/tasks";
 import { pushState } from "@/lib/push";
 import { REMIND_OFFSET_MAX, REMIND_OFFSET_MIN, reminderBase, reminderTime } from "@/lib/reminders";
 import { fmtDate } from "@/lib/date";
+import { completionKey, expandOccurrences } from "@/lib/recurrence";
 import DateField from "@/components/DateField.vue";
 import TimeField from "@/components/TimeField.vue";
 import SubtaskList from "@/components/SubtaskList.vue";
@@ -92,6 +94,49 @@ const stats = computed(() => {
   }
   return null;
 });
+const repeatUntil = computed({
+  get: () => props.draft.repeatUntil ?? "",
+  set: (value: string) => (props.draft.repeatUntil = value),
+});
+const untilPresets = computed(() => {
+  const start = dayjs(props.draft.dueDate);
+  return [
+    { label: "本月底", value: start.endOf("month") },
+    { label: "3 个月后", value: start.add(3, "month") },
+    { label: "今年底", value: start.endOf("year") },
+  ]
+    .filter((p) => !p.value.isSame(start, "day"))
+    .map((p) => ({ label: p.label, value: p.value.format("YYYY-MM-DD") }));
+});
+const untilHint = computed(() => {
+  const { dueDate } = props.draft;
+  const until = repeatUntil.value;
+  if (!until || !dueDate) return "";
+  if (until < dueDate) return "截止日期不能早于开始日期";
+  const count = expandOccurrences([{ ...props.draft, dateOverrides: {} }], new Set(), dueDate, until).length;
+  return `到这天为止，共 ${count} 次`;
+});
+
+// 单次完成：按打开的那一天打卡，即时保存，不影响系列里的其他日子
+const savedTask = computed(() => store.tasks.find((t) => t.id === props.draft.id));
+const canCompleteOnce = computed(
+  () => !!props.occurrenceDate && props.draft.repeatRule !== "none" && !!savedTask.value && savedTask.value.repeatRule !== "none",
+);
+const occurrenceDone = computed(() => !!props.occurrenceDate && store.completions.has(completionKey(props.draft.id, props.occurrenceDate)));
+const occurrenceLabel = computed(() => (props.occurrenceDate ? dayjs(props.occurrenceDate).format("M月D日") : ""));
+const togglingOnce = ref(false);
+async function toggleOnce() {
+  if (!savedTask.value || !props.occurrenceDate || togglingOnce.value) return;
+  togglingOnce.value = true;
+  try {
+    await store.toggleOccurrence({ task: savedTask.value, date: props.occurrenceDate, completed: occurrenceDone.value, isVirtual: true });
+  } catch {
+    // Store 显示错误提示
+  } finally {
+    togglingOnce.value = false;
+  }
+}
+
 const completedLabel = computed(() => {
   const at = props.draft.completed ? props.draft.completedAt : null;
   if (!at) return "";
@@ -184,6 +229,19 @@ const repeatOptions: Task["repeatRule"][] = [
         </div>
       </div>
 
+      <div v-if="draft.repeatRule !== 'none' && draft.dueDate" class="wb-form-field">
+        <Label for="wb-repeat-until">重复至</Label>
+        <DateField
+          id="wb-repeat-until"
+          v-model="repeatUntil"
+          label="重复截止日期"
+          placeholder="一直重复"
+          :min="draft.dueDate"
+          :presets="untilPresets"
+        />
+        <p v-if="untilHint" class="text-[13px]" style="color: var(--text-secondary)">{{ untilHint }}</p>
+      </div>
+
       <div v-if="!draft.parentId" class="wb-form-field">
         <Label>子任务<span class="wb-label-hint">改动即时保存</span></Label>
         <SubtaskList :parent-id="draft.id" :date="occurrenceDate || draft.dueDate" editable />
@@ -212,6 +270,11 @@ const repeatOptions: Task["repeatRule"][] = [
         <input v-model="draft.completed" type="checkbox" class="h-4 w-4" />
         已完成
         <span v-if="completedLabel" class="text-[13px]" style="color: var(--text-secondary)">· {{ completedLabel }}</span>
+      </label>
+      <label v-else-if="canCompleteOnce" class="flex cursor-pointer items-center gap-2 text-sm">
+        <input type="checkbox" class="h-4 w-4" :checked="occurrenceDone" :disabled="togglingOnce" @change="toggleOnce" />
+        {{ occurrenceLabel }} 这一次已完成
+        <span class="text-[13px]" style="color: var(--text-secondary)">· 只影响这一天，即时保存</span>
       </label>
     </fieldset>
     </div>

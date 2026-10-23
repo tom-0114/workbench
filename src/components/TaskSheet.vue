@@ -24,6 +24,12 @@ const props = defineProps<{ occurrence: Occurrence | null }>();
 const open = defineModel<boolean>("open", { default: false });
 
 const store = useTaskStore();
+const untilText = computed(() => {
+  const until = props.occurrence?.task.repeatUntil;
+  if (!until) return "";
+  const [, m, d] = until.split("-").map(Number);
+  return `，到${m}月${d}日`;
+});
 const isMobile = useMediaQuery("(max-width: 767px)");
 
 const draft = ref<Task | null>(null);
@@ -72,7 +78,7 @@ watch(
   () => {
     if (open.value && props.occurrence) {
       const task = props.occurrence.task;
-      draft.value = { ...task, dueTime: task.dueTime ?? "", remindOffset: task.remindOffset ?? null, tags: [...task.tags] };
+      draft.value = { ...task, dueTime: task.dueTime ?? "", remindOffset: task.remindOffset ?? null, repeatUntil: task.repeatUntil ?? "", tags: [...task.tags] };
       tagsInput.value = props.occurrence.task.tags.join(", ");
       original.value = JSON.stringify({task:draft.value,tags:tagsInput.value});
       saving.value = false;
@@ -92,6 +98,10 @@ async function save() {
     .map((s) => s.trim())
     .filter(Boolean);
   if (!draft.value.dueDate) draft.value.repeatRule = "none"; // 无日期无法重复
+  if (draft.value.repeatUntil && draft.value.repeatUntil < draft.value.dueDate) {
+    actionError.value = "重复截止日期不能早于开始日期。";
+    return;
+  }
   saving.value = true;
   actionError.value = "";
   try {
@@ -136,7 +146,7 @@ async function remove() {
       <DialogHeader class="border-b px-6 py-5 pr-14 text-left">
         <DialogTitle>编辑事项</DialogTitle>
         <DialogDescription v-if="draft.repeatRule !== 'none'">
-          重复任务（{{ REPEAT_LABELS[draft.repeatRule] }}）：编辑将作用于整个系列
+          重复任务（{{ REPEAT_LABELS[draft.repeatRule] }}{{ untilText }}）：编辑将作用于整个系列
         </DialogDescription>
         <DialogDescription v-else>点空白处关闭会自动保存。</DialogDescription>
       </DialogHeader>
@@ -167,7 +177,7 @@ async function remove() {
       <SheetHeader class="border-b px-5 pb-3 pt-2 text-left">
         <SheetTitle>编辑事项</SheetTitle>
         <SheetDescription v-if="draft.repeatRule !== 'none'">
-          重复任务（{{ REPEAT_LABELS[draft.repeatRule] }}）：编辑将作用于整个系列
+          重复任务（{{ REPEAT_LABELS[draft.repeatRule] }}{{ untilText }}）：编辑将作用于整个系列
         </SheetDescription>
         <SheetDescription v-else class="sr-only">编辑任务标题、日期和备注。</SheetDescription>
       </SheetHeader>

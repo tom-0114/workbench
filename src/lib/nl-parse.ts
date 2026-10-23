@@ -8,6 +8,8 @@ export interface ParsedQuickAdd {
   dueDate?: string;
   /** 解析出的重复规则，未命中则不设置 */
   repeatRule?: RepeatRule;
+  /** 重复截止日（YYYY-MM-DD），只在有重复规则时解析 */
+  repeatUntil?: string;
   /** 解析出的时间（HH:mm）；只给时间没给日期时由调用方决定落在哪天 */
   dueTime?: string;
   /** 命中的关键词，用于输入时的实时预览（如 "明天 · 每天"） */
@@ -61,7 +63,7 @@ function nextYearMonthDay(today: Date, month: number, day: number): Date | undef
 /**
  * Todoist 式自然语言快速添加（中文）：
  * - 日期：今天/明天/后天/大后天、周X/下周X/星期X、周末/下周末、X月X日/号、X号
- * - 重复：每天(每日)/每周(X)/每月/每年
+ * - 重复：每天(每日)/每周(X)/每月/每年；截止：到/至/直到 X月X日、X号、月底、年底
  * - 时间：15:30、下午3点、晚上8点半、9点15；「今晚」同时表示今天
  * 关键词从标题中剥离；未命中任何关键词时原样返回。
  */
@@ -69,6 +71,7 @@ export function parseQuickAdd(raw: string, base: Date = new Date()): ParsedQuick
   let text = ` ${raw.trim()} `;
   let dueDate: string | undefined;
   let repeatRule: RepeatRule | undefined;
+  let repeatUntil: string | undefined;
   let dueTime: string | undefined;
   const hints: string[] = [];
 
@@ -98,6 +101,27 @@ export function parseQuickAdd(raw: string, base: Date = new Date()): ParsedQuick
     if (repeatRule === "weekly" && repeatMatch[1] && WEEKDAYS[repeatMatch[1]] !== undefined) {
       dueDate = fmtDate(weekdayOf(today, WEEKDAYS[repeatMatch[1]], false));
     }
+  }
+
+  // 重复截止日：需先于普通日期匹配，否则「到11月30日」会被当成开始日期
+  if (repeatRule) {
+    consume(/(?:一直到|直到|截止到|截止|到|至)\s*(?:(\d{1,2})月(\d{1,2})[日号]?|(\d{1,2})[日号]|(月底|年底))(?![楼室栋])/, (m) => {
+      let d: Date | undefined;
+      if (m[4] === "月底") d = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+      else if (m[4] === "年底") d = new Date(today.getFullYear(), 11, 31);
+      else if (m[1]) {
+        const month = Number(m[1]);
+        const day = Number(m[2]);
+        if (month < 1 || month > 12 || day < 1 || day > 31) return false;
+        d = nextYearMonthDay(today, month, day);
+      } else {
+        const day = Number(m[3]);
+        if (day < 1 || day > 31) return false;
+        d = nextMonthDay(today, day);
+      }
+      if (!d) return false;
+      repeatUntil = fmtDate(d);
+    });
   }
 
   // 相对日期
@@ -183,6 +207,12 @@ export function parseQuickAdd(raw: string, base: Date = new Date()): ParsedQuick
     hints.push(`提醒 ${dueTime}`); // 任务只有日期，解析出的时间落成提醒
   });
 
+  // 截止日早于开始日期没有意义，丢弃
+  if (repeatUntil && repeatUntil < (dueDate ?? fmtDate(today))) repeatUntil = undefined;
+  if (repeatUntil) {
+    const [, m, d] = repeatUntil.split("-").map(Number);
+    hints.push(`到${m}月${d}日`);
+  }
   const title = text.replace(/\s+/g, " ").trim();
-  return { title: title || raw.trim(), dueDate, repeatRule, dueTime, hint: hints.join(" · ") };
+  return { title: title || raw.trim(), dueDate, repeatRule, repeatUntil, dueTime, hint: hints.join(" · ") };
 }

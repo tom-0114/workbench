@@ -7,7 +7,7 @@ const props = withDefaults(defineProps<{ date: string; x: number; y: number; bus
   busy: false,
 });
 const emit = defineEmits<{
-  (e: "create", title: string, applied?: { dueDate?: string; repeatRule?: RepeatRule; dueTime?: string }): void;
+  (e: "create", title: string, applied?: { dueDate?: string; repeatRule?: RepeatRule; repeatUntil?: string; dueTime?: string }): void;
   (e: "close"): void;
 }>();
 
@@ -55,7 +55,7 @@ function submit() {
     "create",
     t,
     hasApplied.value
-      ? { dueDate: parsed.value.dueDate, repeatRule: parsed.value.repeatRule, dueTime: parsed.value.dueTime }
+      ? { dueDate: parsed.value.dueDate, repeatRule: parsed.value.repeatRule, repeatUntil: parsed.value.repeatUntil, dueTime: parsed.value.dueTime }
       : undefined,
   );
 }

@@ -56,7 +56,7 @@ function yearlyLunarDates(anchor: Date, startYear: number, endYear: number): str
 /**
  * 把任务展开为 [start, end]（含端点）范围内的可渲染实例。
  * - 非重复任务：dueDate 落在范围内则输出一条
- * - 重复任务：从 dueDate（锚点）起，按规则在范围内展开；
+ * - 重复任务：从 dueDate（锚点）起到 repeatUntil 为止，按规则在范围内展开；
  *   dateOverrides 记录的单次改期例外会把原日期的实例移到新日期（空串 = 该次不出现）
  */
 export function expandOccurrences(
@@ -81,16 +81,19 @@ export function expandOccurrences(
     const anchor = parseDate(t.dueDate);
     const from = t.dueDate > start ? t.dueDate : start;
     if (from > end) continue;
+    const until = t.repeatUntil || "9999-12-31";
 
     const overrides = t.dateOverrides ?? {};
     // 改期例外：原日期 -> 新日期（空串 = 该次移除）；targets 反查“新日期 -> 原日期”
-    const hasOverrides = Object.keys(overrides).length > 0;
+    // 截止日按原日期判断：截止前的实例改期到截止后仍然有效
     const targets = new Map<string, string>();
-    if (hasOverrides) {
-      for (const [origin, target] of Object.entries(overrides)) {
-        if (target) targets.set(target, origin);
-      }
+    for (const [origin, target] of Object.entries(overrides)) {
+      if (target && origin <= until) targets.set(target, origin);
     }
+    const hasOverrides = Object.keys(overrides).length > 0;
+    const last = targets.size ? [...targets.keys()].reduce((a, b) => (b > a ? b : a), until) : until;
+    const stop = last < end ? last : end;
+    if (from > stop) continue;
 
     // 每年（公历/农历）：直接计算目标日期，不逐日扫描
     if (t.repeatRule === "yearly" || t.repeatRule === "yearly-lunar") {
@@ -106,6 +109,7 @@ export function expandOccurrences(
       }
       for (const ds of dates) {
         if (ds < from || ds > end) continue;
+        if (ds > until && !targets.has(ds)) continue;
         if (hasOverrides && overrides[ds] !== undefined) continue; // 原日期已改期，在新日期出现
         out.push({
           task: t,
@@ -119,7 +123,8 @@ export function expandOccurrences(
 
     // 每天/每周/每月：逐日匹配
     const cur = parseDate(from);
-    while (cur <= endDate) {
+    const stopDate = parseDate(stop);
+    while (cur <= stopDate) {
       if (hasOverrides) {
         const ds = fmtDate(cur);
         if (overrides[ds] !== undefined) {
@@ -140,6 +145,10 @@ export function expandOccurrences(
         }
       }
       let match = false;
+      if (fmtDate(cur) > until) {
+        cur.setDate(cur.getDate() + 1);
+        continue;
+      }
       switch (t.repeatRule) {
         case "daily":
           match = true;

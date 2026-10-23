@@ -40,6 +40,7 @@ async function add() {
       dueDate: p.dueDate ?? (p.dueTime ? store.currentDate : ""),
       dueTime: p.dueTime ?? "",
       repeatRule: p.repeatRule ?? "none",
+      repeatUntil: p.repeatUntil ?? "",
     });
     input.value = "";
   } catch {
