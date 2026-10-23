@@ -1,4 +1,4 @@
-export type RepeatRule = "none" | "daily" | "weekly" | "monthly" | "yearly" | "yearly-lunar";
+export type RepeatRule = "none" | "daily" | "workday" | "weekly" | "monthly" | "yearly" | "yearly-lunar";
 
 export type Priority = 0 | 1 | 2 | 3; // 0无 1低 2中 3高
 
@@ -47,6 +47,7 @@ export const PRIORITY_LABELS: Record<Priority, string> = {
 export const REPEAT_LABELS: Record<RepeatRule, string> = {
   none: "不重复",
   daily: "每天",
+  workday: "每个工作日",
   weekly: "每周",
   monthly: "每月",
   yearly: "每年",

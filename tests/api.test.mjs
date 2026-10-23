@@ -48,6 +48,24 @@ test("时间、提醒与完成时间读写", { skip }, async () => {
   assert.equal(undone.data.completedAt, null, "取消完成时清空完成时间");
 });
 
+test("幼儿园寒暑假设置按账号保存并校验", { skip }, async () => {
+  const value = { enabled: true, breaks: [{ name: "暑假", start: "2027-07-01", end: "2027-08-30" }, { name: "寒假", start: "2027-01-27", end: "" }] };
+  const put = await api("/settings/school-breaks", { method: "PUT", body: value });
+  assert.equal(put.status, 200);
+  assert.deepEqual(put.data.breaks.map((b) => b.start), ["2027-01-27", "2027-07-01"], "按开始日期排序");
+  assert.deepEqual((await api("/settings/school-breaks")).data, put.data);
+  const bad = await api("/settings/school-breaks", { method: "PUT", body: { enabled: true, breaks: [{ name: "寒假", start: "2027-02-01", end: "2027-01-01" }] } });
+  assert.equal(bad.status, 400, "结束早于开始应拒绝");
+});
+
+test("日历显示偏好按账号保存并校验", { skip }, async () => {
+  const prefs = { lunar: false, holidayMarks: true, firstDay: 0, showCompleted: false, yearTasks: false };
+  assert.deepEqual((await api("/settings/calendar", { method: "PUT", body: prefs })).data, prefs);
+  assert.deepEqual((await api("/settings/calendar")).data, prefs);
+  assert.equal((await api("/settings/calendar", { method: "PUT", body: { ...prefs, firstDay: 3 } })).status, 400);
+  assert.equal((await api("/settings/unknown")).status, 404);
+});
+
 test("备份覆盖恢复并重映射打卡", { skip }, async () => {
   const repeat = await api("/tasks", { method: "POST", body: { title: "每日打卡", dueDate: day(-3), repeatRule: "daily", priority: 0, tags: ["习惯"], completed: false } });
   await api("/completions", { method: "POST", body: { taskId: repeat.data.id, date: day(-1), done: true } });

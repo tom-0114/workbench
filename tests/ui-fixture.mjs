@@ -1,7 +1,7 @@
 // Isolated local API fixture for UI verification. Never use this for deployment.
 import http from 'node:http';
 const localDate = (offset = 0) => { const d = new Date(); d.setDate(d.getDate() + offset); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; };
-let tasks, completions, reminders, subscriptions, failNext = false;
+let tasks, completions, reminders, subscriptions, settings, failNext = false;
 function reset() {
   tasks = [
     ['整理本周的项目进度',0,3,['工作'],'核对上线进度与待确认的问题，下午同步给团队。'],
@@ -16,7 +16,7 @@ function reset() {
     ['回复合作方的邮件',0,0,['工作'],''],
     ['写周报',0,2,['工作'],''],
   ].map(([title,offset,priority,tags,notes],i)=>({id:i+1,title,notes,priority,tags,dueDate:offset===null?'':localDate(offset),dueTime:'',remindOffset:null,repeatRule:i===3?'daily':i===10?'weekly':'none',completed:i===9,completedAt:i===9?new Date().toISOString():null,deletedAt:null,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()}));
-  completions=[];reminders=[];subscriptions=[];
+  completions=[];reminders=[];subscriptions=[];settings={};
   failNext=false;
 }
 reset();
@@ -40,6 +40,9 @@ http.createServer(async(req,res)=>{
   if(path==='/api/completions'&&req.method==='GET')return json(200,completions);
   if(failNext&&req.method!=='GET'){failNext=false;return json(503,{error:'Fixture save failure'});}
   if(path==='/api/tasks'&&req.method==='POST'){const task={dueTime:'',remindOffset:null,completedAt:null,parentId:null,...body,...(body.parentId?{dueDate:'',repeatRule:'none'}:{}),id:Math.max(0,...tasks.map(t=>t.id))+1,deletedAt:null,createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()};tasks.push(task);return json(200,task);}
+  const setting=path.match(/^\/api\/settings\/(school-breaks|calendar)$/)?.[1];
+  if(setting&&req.method==='GET')return json(200,settings[setting]??null);
+  if(setting&&req.method==='PUT'){settings[setting]=body;return json(200,body);}
   if(path==='/api/reminders'&&req.method==='PUT'){reminders=body.reminders;return json(200,{count:reminders.length});}
   if(path==='/api/push/config')return json(200,{enabled:false});
   if(path==='/api/import'&&req.method==='POST'){

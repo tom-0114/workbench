@@ -1,6 +1,7 @@
 import { Lunar, Solar } from "lunar-typescript";
 import type { Occurrence, Task } from "./types";
 import { daysInMonth, fmtDate, parseDate } from "./date";
+import { isWorkday } from "./cn-holidays";
 
 export function completionKey(taskId: number, date: string): string {
   return `${taskId}:${date}`;
@@ -121,7 +122,7 @@ export function expandOccurrences(
       continue;
     }
 
-    // 每天/每周/每月：逐日匹配
+    // 每天/工作日/每周/每月：逐日匹配
     const cur = parseDate(from);
     const stopDate = parseDate(stop);
     while (cur <= stopDate) {
@@ -152,6 +153,9 @@ export function expandOccurrences(
       switch (t.repeatRule) {
         case "daily":
           match = true;
+          break;
+        case "workday":
+          match = isWorkday(fmtDate(cur));
           break;
         case "weekly":
           match = cur.getDay() === anchor.getDay();

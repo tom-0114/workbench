@@ -4,6 +4,7 @@ import { useMediaQuery } from "@vueuse/core";
 import { useTaskStore } from "@/stores/tasks";
 import type { Occurrence, Task } from "@/lib/types";
 import { REPEAT_LABELS } from "@/lib/types";
+import { lunarText } from "@/lib/lunar";
 import {
   Dialog,
   DialogContent,
@@ -28,7 +29,7 @@ const untilText = computed(() => {
   const until = props.occurrence?.task.repeatUntil;
   if (!until) return "";
   const [, m, d] = until.split("-").map(Number);
-  return `，到${m}月${d}日`;
+  return `，到${m}月${d}日（${lunarText(until)}）`;
 });
 const isMobile = useMediaQuery("(max-width: 767px)");
 

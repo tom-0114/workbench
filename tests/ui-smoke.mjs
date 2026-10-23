@@ -202,6 +202,12 @@ try {
     await page.getByRole('option',{name:'每月',exact:true}).click();
     await save(page);
     await waitForTask(11,t=>t.repeatRule==='monthly');
+    await openDetail(page,'写周报');
+    await page.getByRole('combobox',{name:'重复'}).click();
+    await page.getByRole('option',{name:'每个工作日',exact:true}).click();
+    await page.getByText(/跳过法定节假日/).waitFor();
+    await save(page);
+    await waitForTask(11,t=>t.repeatRule==='workday');
     // 恢复为每周，避免影响后续用例
     await fetch('http://127.0.0.1:3002/api/tasks/11',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({...await taskById(11),repeatRule:'weekly'})});
   });
@@ -222,6 +228,42 @@ try {
     await fetch('http://127.0.0.1:3002/api/tasks/4',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({...await taskById(4),repeatUntil:''})});
     await fetch('http://127.0.0.1:3002/api/completions',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({taskId:4,date:localDate(0),done:false})});
     await page.reload();await page.locator('.wb-main-pane h1').waitFor();
+  });
+  await check('calendar settings configure school breaks shown as day tags',async()=>{
+    await nav(page,'日历');
+    await page.getByRole('button',{name:'日历设置'}).click();
+    await page.getByRole('button',{name:'删除寒假'}).waitFor();
+    await page.getByRole('button',{name:'添加假期'}).click();
+    const row=page.locator('.wb-break-row').nth(1);
+    await row.getByRole('textbox',{name:'第 2 个假期的名称'}).fill('秋游周');
+    await pickDate(page,row.locator('.wb-picker').nth(0),localDate(1));
+    await pickDate(page,row.locator('.wb-picker').nth(1),localDate(3));
+    await page.getByRole('button',{name:'保存',exact:true}).click();
+    await page.getByText('日历设置',{exact:true}).waitFor({state:'hidden'});
+    const saved=await (await fetch('http://127.0.0.1:3002/api/settings/school-breaks')).json();
+    assert.deepEqual(saved.breaks.find(b=>b.name==='秋游周'),{name:'秋游周',start:localDate(1),end:localDate(3)});
+    for(const offset of [1,2,3]) await page.locator(`.fc-daygrid-day[data-date="${localDate(offset)}"] .wb-break-badge`).filter({hasText:'秋游周'}).waitFor();
+    assert.equal(await page.locator(`.fc-daygrid-day[data-date="${localDate(4)}"] .wb-break-badge`).count(),0,'结束日之后不打标签');
+    await nav(page,'今天');
+  });
+  await check('calendar display settings toggle lunar, holidays, week start, done and year tasks',async()=>{
+    await nav(page,'日历');
+    await page.locator('.wb-lunar-day').first().waitFor();
+    assert.ok(await page.locator('.fc-event').filter({hasText:'回复合作方的邮件'}).count()>0,'默认显示已完成任务');
+    await page.getByRole('button',{name:'日历设置'}).click();
+    for(const label of ['显示农历、传统节日和节气','显示法定节假日（休/班）','显示已完成的任务','年视图里显示任务'])await page.getByRole('checkbox',{name:label}).uncheck();
+    await page.getByRole('radio',{name:'周日'}).check();
+    await page.getByRole('button',{name:'保存',exact:true}).click();
+    await page.getByText('日历设置',{exact:true}).waitFor({state:'hidden'});
+    assert.deepEqual(await (await fetch('http://127.0.0.1:3002/api/settings/calendar')).json(),{lunar:false,holidayMarks:false,firstDay:0,showCompleted:false,yearTasks:false});
+    await page.locator('.wb-lunar-day').first().waitFor({state:'detached'});
+    assert.equal(await page.locator('.wb-day-badge').count(),0,'不显示休/班');
+    assert.equal(await page.locator('.fc-col-header-cell').first().textContent(),'周日');
+    assert.equal(await page.locator('.fc-event').filter({hasText:'回复合作方的邮件'}).count(),0,'隐藏已完成任务');
+    await page.locator('.fc-multiMonthYear-button').click();await page.locator('.fc-multimonth').waitFor();
+    assert.equal(await page.locator('.fc-multimonth .fc-event').filter({visible:true}).count(),0,'年视图不显示任务');
+    await fetch('http://127.0.0.1:3002/api/settings/calendar',{method:'PUT',headers:{'content-type':'application/json'},body:'null'});
+    await page.reload();await page.locator('.wb-main-pane h1').waitFor();await nav(page,'今天');
   });
   await check('keyboard shortcuts navigate and focus',async()=>{
     await nav(page,'最近 7 天');

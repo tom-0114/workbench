@@ -2,7 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { useMediaQuery } from '@vueuse/core';
 import { Solar } from 'lunar-typescript';
-import { Bell, CalendarDays, CalendarRange, Check, CheckCheck, ChevronDown, ChevronRight, Download, Inbox, ListTodo, LogOut, Menu, Plus, Search, Settings2, Sun, Tag, Trash2, Upload, UserCog, X } from 'lucide-vue-next';
+import { Bell, CalendarDays, CalendarRange, Check, CheckCheck, ChevronDown, ChevronRight, Download, Inbox, ListTodo, LogOut, Menu, Plus, Search, Settings, Settings2, Sun, Tag, Trash2, Upload, UserCog, X } from 'lucide-vue-next';
 import { useTaskStore } from '@/stores/tasks';
 import { currentUser } from '@/lib/auth';
 import { addDays, fmtDate, parseDate } from '@/lib/date';
@@ -10,6 +10,7 @@ import { parseQuickAdd } from '@/lib/nl-parse';
 import { searchTasks } from '@/lib/search';
 import { useListDrag } from '@/lib/list-drag';
 import { expandOccurrences } from '@/lib/recurrence';
+import { lunarText } from '@/lib/lunar';
 import { loadAppearance, setAppearance, type Appearance } from '@/lib/appearance';
 import { downloadTaskBackup } from '@/lib/backup';
 import type { Occurrence, Task } from '@/lib/types';
@@ -21,6 +22,7 @@ import MonthView from './MonthView.vue';
 import AccountDialog from './AccountDialog.vue';
 import ImportDialog from './ImportDialog.vue';
 import NotificationDialog from './NotificationDialog.vue';
+import CalendarSettingsDialog from './CalendarSettingsDialog.vue';
 import { pushState, refreshPushStatus } from '@/lib/push';
 
 defineProps<{ selectedKey?: string }>();
@@ -39,6 +41,7 @@ const navOpen = ref(false);
 const accountOpen = ref(false);
 const importOpen = ref(false);
 const notifyOpen = ref(false);
+const calendarSettingsOpen = ref(false);
 const pushStatusLabel = computed(() => ({ on: '已开启', off: '未开启', denied: '已拦截', 'needs-install': '需添加到主屏幕', 'server-off': '未配置', unsupported: '不支持' } as Record<string, string>)[pushState.status] ?? '');
 const settingsOpen = ref(false);
 const query = ref('');
@@ -204,7 +207,7 @@ function formatDate(date: string) {
   if(date===store.currentDate) return '今天';
   if(date===addDays(store.currentDate,1)) return '明天';
   const d=parseDate(date);
-  return `${d.getFullYear()!==parseDate(store.currentDate).getFullYear()?d.getFullYear()+'年':''}${d.getMonth()+1}月${d.getDate()}日`;
+  return `${d.getFullYear()!==parseDate(store.currentDate).getFullYear()?d.getFullYear()+'年':''}${d.getMonth()+1}月${d.getDate()}日（${lunarText(date)}）`;
 }
 // 切换清单只换数据源，不强制重建列表（重建会让大列表整屏重挂载造成卡顿）；滚动位置手动复位
 async function navigate(target: View, tag = '') {
@@ -303,7 +306,10 @@ onBeforeUnmount(()=>window.removeEventListener('keydown',onKey));
           <button v-if="mobile" class="wb-control" aria-label="打开清单导航" :aria-expanded="navOpen" @click="navOpen=true"><Menu /></button>
           <div><h1>{{ title }}</h1><p v-if="view==='today'">{{ dateLabel }}<span class="wb-lunar">{{ lunarLabel }}</span></p><p v-else-if="view==='upcoming'">{{ formatDate(store.currentDate) }} — {{ formatDate(addDays(store.currentDate,6)) }}</p><p v-else-if="view==='inbox'">先记下来，稍后安排</p><p v-else-if="view==='tag'">按标签整理的任务</p></div>
         </div>
-        <button v-if="view==='calendar'&&!mobile" type="button" class="wb-inbox-toggle" :class="{ 'is-on': calendarInbox }" :aria-pressed="calendarInbox" @click="setCalendarInbox(!calendarInbox)"><Inbox aria-hidden="true" />收集箱<span>{{ store.inboxTasks.length }}</span></button>
+        <div v-if="view==='calendar'" class="wb-calendar-actions">
+          <button type="button" class="wb-control" aria-label="日历设置" title="日历设置" @click="calendarSettingsOpen=true"><Settings aria-hidden="true" /></button>
+          <button v-if="!mobile" type="button" class="wb-inbox-toggle" :class="{ 'is-on': calendarInbox }" :aria-pressed="calendarInbox" @click="setCalendarInbox(!calendarInbox)"><Inbox aria-hidden="true" />收集箱<span>{{ store.inboxTasks.length }}</span></button>
+        </div>
         <label v-if="!['calendar','trash','completed'].includes(view)" class="wb-sort"><span class="sr-only">任务排序</span><select v-model="sort" aria-label="任务排序"><option value="priority">按优先级</option><option value="date">按日期</option><option value="title">按标题</option></select><ChevronDown /></label>
       </header>
       <MonthView v-if="view==='calendar'" class="wb-workspace-calendar" :inbox-open="calendarInbox" @open-task="emit('open-task',$event)" @close-inbox="setCalendarInbox(false)" />
@@ -342,5 +348,6 @@ onBeforeUnmount(()=>window.removeEventListener('keydown',onKey));
     <AccountDialog v-model:open="accountOpen" />
     <ImportDialog v-model:open="importOpen" />
     <NotificationDialog v-model:open="notifyOpen" />
+    <CalendarSettingsDialog v-model:open="calendarSettingsOpen" />
   </div>
 </template>

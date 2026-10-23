@@ -19,6 +19,9 @@ import { useTaskStore } from "@/stores/tasks";
 import type { Occurrence, RepeatRule } from "@/lib/types";
 import { fmtDate } from "@/lib/date";
 import { getDayMark } from "@/lib/cn-holidays";
+import { lunarCellText, lunarText } from "@/lib/lunar";
+import { getSchoolBreak, loadSchoolBreaks, schoolBreaks } from "@/lib/school-breaks";
+import { calendarPrefs, loadCalendarPrefs } from "@/lib/calendar-prefs";
 import { reminderLabel, reminderTime } from "@/lib/reminders";
 import QuickAddPopover from "./QuickAddPopover.vue";
 import CalendarInbox from "./CalendarInbox.vue";
@@ -65,7 +68,8 @@ function toRuntimeDate(marker: unknown): Date {
 
 const events = computed<EventInput[]>(() => {
   if (!range.value || !store.ready) return [];
-  return store.occurrencesInRange(range.value.start, range.value.end).map(occToEvent);
+  const occ = store.occurrencesInRange(range.value.start, range.value.end);
+  return (calendarPrefs.showCompleted ? occ : occ.filter((o) => !o.completed)).map(occToEvent);
 });
 
 function onDatesSet(arg: DatesSetArg) {
@@ -190,7 +194,14 @@ function onCalendarNav(event: Event) {
   else if (detail === "today") api.today();
 }
 
-onMounted(() => window.addEventListener("wb:calendar-nav", onCalendarNav));
+onMounted(() => {
+  window.addEventListener("wb:calendar-nav", onCalendarNav);
+  void loadSchoolBreaks();
+  void loadCalendarPrefs();
+});
+// 假期名称是用户填的，拼进格子 HTML 前转义
+const escapeHtml = (text: string) =>
+  text.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 onBeforeUnmount(() => {
   window.removeEventListener("wb:calendar-nav", onCalendarNav);
   document.removeEventListener("pointermove", trackInboxHover);
@@ -204,162 +215,178 @@ function openMobileQuickAdd() {
   };
 }
 
-const options = computed<CalendarOptions>(() => ({
-  plugins: PLUGINS,
-  initialView: isMobile.value ? "listWeek" : "dayGridMonth",
-  locale: zhCn,
-  firstDay: 1,
-  height: "100%",
-  headerToolbar: isMobile.value
-    ? {
-        left: "title",
-        center: "prev,today,next",
-        right: "listWeek,dayGridMonth",
+const options = computed<CalendarOptions>(() => {
+  // 在这里读一遍寒暑假和显示偏好，改动后生成新配置，日历才会重绘格子
+  void JSON.stringify(schoolBreaks);
+  const { lunar: showLunar, holidayMarks, firstDay } = calendarPrefs;
+  const breakOf = getSchoolBreak;
+  const markOf = (date: string) => (holidayMarks ? getDayMark(date) : undefined);
+  return {
+    plugins: PLUGINS,
+    initialView: isMobile.value ? "listWeek" : "dayGridMonth",
+    locale: zhCn,
+    firstDay,
+    height: "100%",
+    headerToolbar: isMobile.value
+      ? {
+          left: "title",
+          center: "prev,today,next",
+          right: "listWeek,dayGridMonth",
+        }
+      : {
+          left: "title",
+          center: "",
+          right: "listWeek,dayGridMonth,multiMonthYear prev,today,next",
+        },
+    buttonText: { listWeek: "周", dayGridMonth: "月", multiMonthYear: "年" },
+    multiMonthMaxColumns: 3,
+    fixedWeekCount: false,
+    dayMaxEvents: isMobile.value ? 2 : true,
+    dayHeaderFormat: { weekday: "short" },
+    // 周列表：短区间标题（窄屏放得下），今天分组用「今天」强调，日期省略年份
+    views: {
+      listWeek: { titleFormat: { month: "long", day: "numeric" } },
+    },
+    listDayFormat: (arg) => {
+      const d = toRuntimeDate(arg.date);
+      return fmtDate(d) === store.currentDate
+        ? "今天"
+        : ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"][d.getDay()];
+    },
+    listDaySideFormat: (arg) => {
+      const d = toRuntimeDate(arg.date);
+      const sb = breakOf(fmtDate(d));
+      return `${d.getMonth() + 1}月${d.getDate()}日 ${showLunar ? ` · ${lunarText(fmtDate(d))}` : ""}${sb ? ` · ${sb.name}` : ""}`;
+    },
+    dayHeaderDidMount: (arg) => {
+      if (arg.view.type.startsWith("list") && fmtDate(arg.date) === store.currentDate) arg.el.classList.add("wb-list-today");
+    },
+    noEventsContent: "本周没有待办",
+    // 日期数字 + 农历（节日/节气优先）+ 节假日角标（如 国庆·休 / 班）
+    dayCellContent: (arg) => {
+      const num = arg.dayNumberText.replace("日", "");
+      const date = fmtDate(arg.date);
+      const mark = markOf(date);
+      const lunar = showLunar ? lunarCellText(date) : null;
+      const badge = mark
+        ? `<span class="wb-day-badge">${mark.type === "holiday" ? `<span class="wb-badge-name">${mark.name}·</span>休` : "班"}</span>`
+        : "";
+      const sb = breakOf(date);
+      const breakBadge = sb ? `<span class="wb-break-badge">${escapeHtml(sb.name)}</span>` : "";
+      return {
+        html: `<span class="wb-daynum">${num}</span>${lunar ? `<span class="wb-lunar-day${lunar.special ? " is-special" : ""}">${lunar.text}</span>` : ""}${badge}${breakBadge}`,
+      };
+    },
+    // 节假日(休)/调休上班(班)/周末 背景区分
+    dayCellClassNames: (arg) => {
+      const date = fmtDate(arg.date);
+      const mark = markOf(date);
+      const dow = arg.date.getDay();
+      const classes = mark ? [mark.type === "holiday" ? "wb-holiday" : "wb-workday"] : dow === 0 || dow === 6 ? ["wb-weekend"] : [];
+      if (breakOf(date)) classes.push("wb-school-break");
+      return classes;
+    },
+    // 同一天内：未完成在前，已完成沉底；设了提醒的按提醒时间排在前面，其次按优先级降序
+    eventOrder: (a: any, b: any) => {
+      const oa = (a.extendedProps ?? a).occ as Occurrence | undefined;
+      const ob = (b.extendedProps ?? b).occ as Occurrence | undefined;
+      const ca = oa?.completed ? 1 : 0;
+      const cb = ob?.completed ? 1 : 0;
+      if (ca !== cb) return ca - cb;
+      const ra = oa?.task.remindOffset != null ? reminderTime(oa.date, oa.task.dueTime, oa.task.remindOffset).getTime() : Infinity;
+      const rb = ob?.task.remindOffset != null ? reminderTime(ob.date, ob.task.dueTime, ob.task.remindOffset).getTime() : Infinity;
+      if (ra !== rb) return ra < rb ? -1 : 1;
+      const pa = oa?.task.priority ?? 0;
+      const pb = ob?.task.priority ?? 0;
+      if (pa !== pb) return pb - pa;
+      return (oa?.task.id ?? 0) - (ob?.task.id ?? 0);
+    },
+    eventOrderStrict: true,
+    // 日历事项与收集箱事项都走 FullCalendar 的拖拽（收集箱见 CalendarInbox 的 Draggable）
+    editable: true,
+    // 任务只有单个日期，禁止拉伸成跨天事件
+    eventDurationEditable: false,
+    // 拖拽镜像是 fixed 定位，挂在日历内时会被祖先的 transform（视图入场动画）带偏
+    fixedMirrorParent: document.body,
+    droppable: true,
+    drop: onExternalDrop,
+    eventDragStart: onEventDragStart,
+    eventDragStop: onEventDragStop,
+    events: events.value,
+    datesSet: onDatesSet,
+    dateClick: onDateClick,
+    eventClick: onEventClick,
+    eventDrop: onEventDrop,
+    eventContent: (arg) => {
+      const o = arg.event.extendedProps.occ as Occurrence;
+      const content = document.createElement("span");
+      content.className = "wb-event-content";
+
+      // 手机月视图格子只有几十像素宽：不放打卡按钮和重复标记，标题独占宽度换行两行；
+      // 完成与详情操作走默认的周列表或详情抽屉
+      const compactMonthGrid = isMobile.value && arg.view.type === "dayGridMonth";
+
+      if (!compactMonthGrid) {
+        const doneButton = document.createElement("button");
+        doneButton.type = "button";
+        doneButton.className = "wb-event-check";
+        doneButton.dataset.doneBtn = "";
+        doneButton.title = o.completed ? "取消完成" : "标记完成";
+        doneButton.setAttribute("aria-label", `${o.completed ? "取消完成" : "完成"}：${o.task.title}`);
+        doneButton.setAttribute("aria-pressed", String(o.completed));
+        doneButton.textContent = "✓";
+        // 勾选时轻量 pop 一下（120-220ms 量级，符合全局动效规范）
+        doneButton.addEventListener("click", () => {
+          doneButton.classList.add("wb-pop");
+          setTimeout(() => doneButton.classList.remove("wb-pop"), 300);
+        });
+        content.append(doneButton);
       }
-    : {
-        left: "title",
-        center: "",
-        right: "listWeek,dayGridMonth,multiMonthYear prev,today,next",
-      },
-  buttonText: { listWeek: "周", dayGridMonth: "月", multiMonthYear: "年" },
-  multiMonthMaxColumns: 3,
-  fixedWeekCount: false,
-  dayMaxEvents: isMobile.value ? 2 : true,
-  dayHeaderFormat: { weekday: "short" },
-  // 周列表：短区间标题（窄屏放得下），今天分组用「今天」强调，日期省略年份
-  views: {
-    listWeek: { titleFormat: { month: "long", day: "numeric" } },
-  },
-  listDayFormat: (arg) => {
-    const d = toRuntimeDate(arg.date);
-    return fmtDate(d) === store.currentDate
-      ? "今天"
-      : ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"][d.getDay()];
-  },
-  listDaySideFormat: (arg) => {
-    const d = toRuntimeDate(arg.date);
-    return `${d.getMonth() + 1}月${d.getDate()}日`;
-  },
-  dayHeaderDidMount: (arg) => {
-    if (arg.view.type.startsWith("list") && fmtDate(arg.date) === store.currentDate) arg.el.classList.add("wb-list-today");
-  },
-  noEventsContent: "本周没有待办",
-  // 日期数字 + 节假日角标（如 国庆·休 / 班）
-  dayCellContent: (arg) => {
-    const num = arg.dayNumberText.replace("日", "");
-    const mark = getDayMark(fmtDate(arg.date));
-    const badge = mark
-      ? `<span class="wb-day-badge">${mark.type === "holiday" ? `${mark.name}·休` : "班"}</span>`
-      : "";
-    return { html: `<span class="wb-daynum">${num}</span>${badge}` };
-  },
-  // 节假日(休)/调休上班(班)/周末 背景区分
-  dayCellClassNames: (arg) => {
-    const mark = getDayMark(fmtDate(arg.date));
-    if (mark) return [mark.type === "holiday" ? "wb-holiday" : "wb-workday"];
-    const dow = arg.date.getDay();
-    return dow === 0 || dow === 6 ? ["wb-weekend"] : [];
-  },
-  // 同一天内：未完成在前，已完成沉底；设了提醒的按提醒时间排在前面，其次按优先级降序
-  eventOrder: (a: any, b: any) => {
-    const oa = (a.extendedProps ?? a).occ as Occurrence | undefined;
-    const ob = (b.extendedProps ?? b).occ as Occurrence | undefined;
-    const ca = oa?.completed ? 1 : 0;
-    const cb = ob?.completed ? 1 : 0;
-    if (ca !== cb) return ca - cb;
-    const ra = oa?.task.remindOffset != null ? reminderTime(oa.date, oa.task.dueTime, oa.task.remindOffset).getTime() : Infinity;
-    const rb = ob?.task.remindOffset != null ? reminderTime(ob.date, ob.task.dueTime, ob.task.remindOffset).getTime() : Infinity;
-    if (ra !== rb) return ra < rb ? -1 : 1;
-    const pa = oa?.task.priority ?? 0;
-    const pb = ob?.task.priority ?? 0;
-    if (pa !== pb) return pb - pa;
-    return (oa?.task.id ?? 0) - (ob?.task.id ?? 0);
-  },
-  eventOrderStrict: true,
-  // 日历事项与收集箱事项都走 FullCalendar 的拖拽（收集箱见 CalendarInbox 的 Draggable）
-  editable: true,
-  // 任务只有单个日期，禁止拉伸成跨天事件
-  eventDurationEditable: false,
-  // 拖拽镜像是 fixed 定位，挂在日历内时会被祖先的 transform（视图入场动画）带偏
-  fixedMirrorParent: document.body,
-  droppable: true,
-  drop: onExternalDrop,
-  eventDragStart: onEventDragStart,
-  eventDragStop: onEventDragStop,
-  events: events.value,
-  datesSet: onDatesSet,
-  dateClick: onDateClick,
-  eventClick: onEventClick,
-  eventDrop: onEventDrop,
-  eventContent: (arg) => {
-    const o = arg.event.extendedProps.occ as Occurrence;
-    const content = document.createElement("span");
-    content.className = "wb-event-content";
 
-    // 手机月视图格子只有几十像素宽：不放打卡按钮和重复标记，标题独占宽度换行两行；
-    // 完成与详情操作走默认的周列表或详情抽屉
-    const compactMonthGrid = isMobile.value && arg.view.type === "dayGridMonth";
+      const title = document.createElement("span");
+      title.className = "wb-title";
+      title.title = o.task.title;
+      title.textContent = o.task.title;
+      content.append(title);
 
-    if (!compactMonthGrid) {
-      const doneButton = document.createElement("button");
-      doneButton.type = "button";
-      doneButton.className = "wb-event-check";
-      doneButton.dataset.doneBtn = "";
-      doneButton.title = o.completed ? "取消完成" : "标记完成";
-      doneButton.setAttribute("aria-label", `${o.completed ? "取消完成" : "完成"}：${o.task.title}`);
-      doneButton.setAttribute("aria-pressed", String(o.completed));
-      doneButton.textContent = "✓";
-      // 勾选时轻量 pop 一下（120-220ms 量级，符合全局动效规范）
-      doneButton.addEventListener("click", () => {
-        doneButton.classList.add("wb-pop");
-        setTimeout(() => doneButton.classList.remove("wb-pop"), 300);
-      });
-      content.append(doneButton);
-    }
+      const subs = store.subtasksByParent.get(o.task.id);
+      if (subs?.length && !compactMonthGrid) {
+        const done = subs.filter((sub) => store.isSubtaskDone(sub, o.task, o.date)).length;
+        const chip = document.createElement("span");
+        chip.className = "wb-event-subs";
+        chip.textContent = `${done}/${subs.length}`;
+        chip.setAttribute("aria-label", `子任务完成 ${done}/${subs.length}`);
+        content.append(chip);
+      }
 
-    const title = document.createElement("span");
-    title.className = "wb-title";
-    title.title = o.task.title;
-    title.textContent = o.task.title;
-    content.append(title);
+      // 提醒时间放在标题后面，标题过长时被省略的是标题而不是提醒
+      const remind = o.completed ? "" : reminderLabel(o.task, o.date, store.currentDate);
+      if (remind) {
+        const tag = document.createElement("span");
+        tag.className = "wb-event-remind";
+        tag.title = `提醒 ${remind}`;
+        tag.setAttribute("aria-label", `提醒 ${remind}`);
+        tag.innerHTML = BELL_SVG;
+        // 手机月视图格子太窄，只留铃铛
+        if (!compactMonthGrid) tag.append(remind);
+        content.append(tag);
+      }
 
-    const subs = store.subtasksByParent.get(o.task.id);
-    if (subs?.length && !compactMonthGrid) {
-      const done = subs.filter((sub) => store.isSubtaskDone(sub, o.task, o.date)).length;
-      const chip = document.createElement("span");
-      chip.className = "wb-event-subs";
-      chip.textContent = `${done}/${subs.length}`;
-      chip.setAttribute("aria-label", `子任务完成 ${done}/${subs.length}`);
-      content.append(chip);
-    }
-
-    // 提醒时间放在标题后面，标题过长时被省略的是标题而不是提醒
-    const remind = o.completed ? "" : reminderLabel(o.task, o.date, store.currentDate);
-    if (remind) {
-      const tag = document.createElement("span");
-      tag.className = "wb-event-remind";
-      tag.title = `提醒 ${remind}`;
-      tag.setAttribute("aria-label", `提醒 ${remind}`);
-      tag.innerHTML = BELL_SVG;
-      // 手机月视图格子太窄，只留铃铛
-      if (!compactMonthGrid) tag.append(remind);
-      content.append(tag);
-    }
-
-    if (o.isVirtual && !compactMonthGrid) {
-      const repeat = document.createElement("span");
-      repeat.className = "wb-rep";
-      repeat.textContent = "↻";
-      repeat.setAttribute("aria-label", "重复事项");
-      content.append(repeat);
-    }
-    return { domNodes: [content] };
-  },
-}));
+      if (o.isVirtual && !compactMonthGrid) {
+        const repeat = document.createElement("span");
+        repeat.className = "wb-rep";
+        repeat.textContent = "↻";
+        repeat.setAttribute("aria-label", "重复事项");
+        content.append(repeat);
+      }
+      return { domNodes: [content] };
+    },
+  };
+});
 </script>
 
 <template>
-  <div class="wb-calendar h-full" :class="{ 'has-inbox': inboxOpen && !isMobile }">
+  <div class="wb-calendar h-full" :class="{ 'has-inbox': inboxOpen && !isMobile, 'hide-year-tasks': !calendarPrefs.yearTasks }">
     <div class="wb-calendar-main">
       <!-- key 绑定日期：跨零点时重建日历，让“今天”的蓝圈移动到新的一天 -->
       <FullCalendar ref="calRef" :key="`${store.currentDate}:${isMobile ? 'mobile' : 'desktop'}`" :options="options" />

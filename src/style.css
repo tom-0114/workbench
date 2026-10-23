@@ -18,6 +18,8 @@
   --priority-low: #4169d8;
   --holiday-text: #246a36;
   --workday-text: #8d5300;
+  --break-color: #9b51e0;
+  --break-text: #7a35bd;
   --hover: rgba(0, 0, 0, 0.035);
   --selected: rgba(0, 0, 0, 0.055);
   --radius-sm: 6px;
@@ -72,6 +74,8 @@
   --priority-low: #9ab6ff;
   --holiday-text: #a1dcb0;
   --workday-text: #e6bc77;
+  --break-color: #b98af0;
+  --break-text: #d2b4f5;
   --secondary: #333336;
   --secondary-foreground: var(--text-primary);
   --muted: var(--bg-secondary);
@@ -1913,3 +1917,49 @@ body.wb-list-dragging, body.wb-list-dragging * { cursor:grabbing !important; use
   .wb-subtask, .wb-subtask-add { min-height:38px; }
   .wb-subtask-add input, .wb-subtask-input { font-size:16px; }
 }
+
+/* 农历 */
+.wb-calendar .fc .wb-lunar-day { flex:none; font-size:10px; line-height:1; color:var(--text-tertiary); white-space:nowrap; }
+.wb-calendar .fc .wb-lunar-day.is-special { color:var(--accent-color); }
+.wb-calendar .fc .fc-multimonth .wb-lunar-day { display:none; }
+.wb-row-lunar { margin-left:-2px; color:var(--text-tertiary); font-size:11px; }
+.wb-picker-lunar { margin-right:6px; font-size:12px; color:var(--text-tertiary); white-space:nowrap; }
+.wb-picker-icon { width:14px; height:14px; vertical-align:-2px; }
+.wb-picker-pop .ant-picker-cell .wb-picker-cell { display:inline-flex; flex-direction:column; align-items:center; justify-content:center; height:34px; min-width:32px; line-height:1.1; padding:0 2px; }
+.wb-picker-pop .ant-picker-cell .wb-picker-cell small { font-size:9px; color:var(--text-tertiary); white-space:nowrap; }
+.wb-picker-pop .ant-picker-cell .wb-picker-cell small.is-special { color:var(--accent-color); }
+.wb-picker-pop .ant-picker-cell-selected .wb-picker-cell small { color:inherit; }
+.wb-picker-pop .ant-picker-cell::before { height:34px; }
+@media (max-width:767px) {
+  .wb-calendar .fc .fc-dayGridMonth-view .wb-lunar-day { font-size:8px; }
+
+}
+/* 手机月视图格子窄：角标只留“休/班”，农历换到第二行 */
+@media (max-width:767px) {
+  .wb-calendar .fc .fc-dayGridMonth-view .fc-daygrid-day-number { flex-wrap:wrap; justify-content:center; row-gap:0; }
+  .wb-calendar .fc .fc-dayGridMonth-view .wb-badge-name { display:none; }
+  .wb-calendar .fc .fc-dayGridMonth-view .wb-day-badge { max-width:none; padding:1px 2px; }
+  .wb-calendar .fc .fc-dayGridMonth-view .wb-lunar-day { order:3; flex-basis:100%; text-align:center; margin-top:1px; }
+}
+
+/* 幼儿园寒暑假：和“国庆·休”同样的标签，假期里每天都打 */
+.wb-calendar .fc .wb-break-badge { flex:none; font-size:10px; font-weight:500; line-height:1; padding:2.5px 4px; border-radius:4px; white-space:nowrap; color:var(--break-text); background:color-mix(in srgb, var(--break-color) 14%, transparent); }
+/* 年视图放不下标签，日期下面画一道紫线 */
+.wb-calendar .fc .fc-multimonth .wb-break-badge { display:none; }
+.wb-calendar .fc .fc-multimonth .wb-school-break .wb-daynum { box-shadow: inset 0 -2px 0 var(--break-color); border-radius:0; }
+.wb-calendar-actions { display:flex; align-items:center; gap:8px; }
+.wb-break-rows { display:flex; flex-direction:column; gap:10px; }
+.wb-break-row { display:grid; grid-template-columns: 72px 1fr 1fr 32px; grid-template-areas:"name start end del"; gap:8px; align-items:center; }
+.wb-break-row > :nth-child(1) { grid-area:name; } .wb-break-row > :nth-child(2) { grid-area:start; }
+.wb-break-row > :nth-child(3) { grid-area:end; } .wb-break-row > :nth-child(4) { grid-area:del; }
+@media (max-width:767px) {
+  .wb-calendar .fc .fc-dayGridMonth-view .wb-break-badge { order:4; font-size:8px; padding:1px 2px; margin-top:1px; }
+  .wb-break-row { grid-template-columns: 1fr 32px; grid-template-areas:"name del" "start start" "end end"; padding-bottom:10px; border-bottom:1px solid var(--border-subtle); }
+}
+/* 日历设置里关掉“年视图显示任务”时，年视图只看日期和假期 */
+.wb-calendar.hide-year-tasks .fc .fc-multimonth .fc-daygrid-day-events { display:none; }
+.wb-calendar.hide-year-tasks .fc .fc-multimonth .fc-daygrid-day-frame { min-height:0; }
+.wb-cal-section { display:flex; flex-direction:column; gap:10px; }
+.wb-cal-section h3 { font-size:13px; font-weight:600; color:var(--text-secondary); }
+.wb-cal-toggle { display:flex; align-items:center; gap:8px; font-size:14px; cursor:pointer; }
+.wb-cal-toggle label { display:inline-flex; align-items:center; gap:4px; cursor:pointer; }

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import { ArrowRight, CalendarCheck2, LoaderCircle } from "lucide-vue-next";
+import { fmtDate } from "@/lib/date";
+import { lunarText } from "@/lib/lunar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,7 +23,7 @@ const todayLabel = computed(() =>
     month: "long",
     day: "numeric",
     weekday: "long",
-  }).format(new Date()),
+  }).format(new Date()) + ` · 农历${lunarText(fmtDate(new Date()))}`,
 );
 const dayNumber = computed(() => String(new Date().getDate()).padStart(2, "0"));
 

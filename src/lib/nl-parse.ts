@@ -63,7 +63,7 @@ function nextYearMonthDay(today: Date, month: number, day: number): Date | undef
 /**
  * Todoist 式自然语言快速添加（中文）：
  * - 日期：今天/明天/后天/大后天、周X/下周X/星期X、周末/下周末、X月X日/号、X号
- * - 重复：每天(每日)/每周(X)/每月/每年；截止：到/至/直到 X月X日、X号、月底、年底
+ * - 重复：每天(每日)/每个工作日/每周(X)/每月/每年；截止：到/至/直到 X月X日、X号、月底、年底
  * - 时间：15:30、下午3点、晚上8点半、9点15；「今晚」同时表示今天
  * 关键词从标题中剥离；未命中任何关键词时原样返回。
  */
@@ -86,7 +86,7 @@ export function parseQuickAdd(raw: string, base: Date = new Date()): ParsedQuick
   const today = startOfDay(base);
 
   // 重复规则：「每周X」同时把锚点定到最近的该周X
-  const repeatMatch = text.match(/每天|每日|每周([一二三四五六日天末])?|每月|每年/);
+  const repeatMatch = text.match(/每个?工作日|每天|每日|每周([一二三四五六日天末])?|每月|每年/);
   if (repeatMatch && repeatMatch.index !== undefined) {
     const token = repeatMatch[0];
     repeatRule = token.startsWith("每周")
@@ -95,7 +95,9 @@ export function parseQuickAdd(raw: string, base: Date = new Date()): ParsedQuick
         ? "monthly"
         : token.startsWith("每年")
           ? "yearly"
-          : "daily";
+          : token.endsWith("工作日")
+            ? "workday"
+            : "daily";
     hints.push(token);
     text = text.slice(0, repeatMatch.index) + " " + text.slice(repeatMatch.index + token.length);
     if (repeatRule === "weekly" && repeatMatch[1] && WEEKDAYS[repeatMatch[1]] !== undefined) {

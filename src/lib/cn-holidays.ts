@@ -63,6 +63,17 @@ for (const [date, name] of WORKDAYS) {
   MARKS.set(date, { type: "workday", name });
 }
 
+/** 已录入安排的年份；之后的年份还没公布，只能按周一到周五算 */
+export const HOLIDAY_DATA_LAST_YEAR = Math.max(...HOLIDAYS.map(([start]) => Number(start.slice(0, 4))));
+
+/** 是否上班：法定假日休，调休日上班，其余按周一到周五 */
+export function isWorkday(date: string): boolean {
+  const mark = MARKS.get(date);
+  if (mark) return mark.type === "workday";
+  const dow = parseDate(date).getDay();
+  return dow !== 0 && dow !== 6;
+}
+
 /** 查询某天的 休/班 标记，普通日返回 undefined */
 export function getDayMark(date: string): DayMark | undefined {
   return MARKS.get(date);

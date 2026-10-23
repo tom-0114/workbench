@@ -9,6 +9,8 @@ import { pushState } from "@/lib/push";
 import { REMIND_OFFSET_MAX, REMIND_OFFSET_MIN, reminderBase, reminderTime } from "@/lib/reminders";
 import { fmtDate } from "@/lib/date";
 import { completionKey, expandOccurrences } from "@/lib/recurrence";
+import { HOLIDAY_DATA_LAST_YEAR } from "@/lib/cn-holidays";
+import { lunarText } from "@/lib/lunar";
 import DateField from "@/components/DateField.vue";
 import TimeField from "@/components/TimeField.vue";
 import SubtaskList from "@/components/SubtaskList.vue";
@@ -117,13 +119,22 @@ const untilHint = computed(() => {
   return `到这天为止，共 ${count} 次`;
 });
 
+// 节假日数据只到已公布的年份，之后的工作日暂按周一到周五
+const workdayHint = computed(() => {
+  const { repeatRule, dueDate } = props.draft;
+  if (repeatRule !== "workday" || !dueDate) return "";
+  const lastYear = Number((repeatUntil.value || "9999").slice(0, 4));
+  if (lastYear <= HOLIDAY_DATA_LAST_YEAR) return "跳过法定节假日，调休上班日照常";
+  return `跳过法定节假日，调休上班日照常；${HOLIDAY_DATA_LAST_YEAR + 1} 年起的安排还没公布，暂按周一到周五`;
+});
+
 // 单次完成：按打开的那一天打卡，即时保存，不影响系列里的其他日子
 const savedTask = computed(() => store.tasks.find((t) => t.id === props.draft.id));
 const canCompleteOnce = computed(
   () => !!props.occurrenceDate && props.draft.repeatRule !== "none" && !!savedTask.value && savedTask.value.repeatRule !== "none",
 );
 const occurrenceDone = computed(() => !!props.occurrenceDate && store.completions.has(completionKey(props.draft.id, props.occurrenceDate)));
-const occurrenceLabel = computed(() => (props.occurrenceDate ? dayjs(props.occurrenceDate).format("M月D日") : ""));
+const occurrenceLabel = computed(() => (props.occurrenceDate ? `${dayjs(props.occurrenceDate).format("M月D日")}（${lunarText(props.occurrenceDate)}）` : ""));
 const togglingOnce = ref(false);
 async function toggleOnce() {
   if (!savedTask.value || !props.occurrenceDate || togglingOnce.value) return;
@@ -140,7 +151,9 @@ async function toggleOnce() {
 const completedLabel = computed(() => {
   const at = props.draft.completed ? props.draft.completedAt : null;
   if (!at) return "";
-  return new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(at));
+  const d = new Date(at);
+  const time = new Intl.DateTimeFormat("zh-CN", { hour: "2-digit", minute: "2-digit" }).format(d);
+  return `${d.getMonth() + 1}月${d.getDate()}日（${lunarText(fmtDate(d))}）${time}`;
 });
 
 // Enter 直接保存；Shift+Enter 在备注里换行；输入法选词中的 Enter 不触发
@@ -152,6 +165,7 @@ function onEnterKey(event: KeyboardEvent) {
 const repeatOptions: Task["repeatRule"][] = [
   "none",
   "daily",
+  "workday",
   "weekly",
   "monthly",
   "yearly",
@@ -240,6 +254,7 @@ const repeatOptions: Task["repeatRule"][] = [
           :presets="untilPresets"
         />
         <p v-if="untilHint" class="text-[13px]" style="color: var(--text-secondary)">{{ untilHint }}</p>
+        <p v-if="workdayHint" class="text-[13px]" style="color: var(--text-secondary)">{{ workdayHint }}</p>
       </div>
 
       <div v-if="!draft.parentId" class="wb-form-field">

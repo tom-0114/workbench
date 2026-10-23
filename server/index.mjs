@@ -30,7 +30,7 @@ const PASSWORD_MIN = 8;
 const PASSWORD_MAX = 128;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
-const REPEAT_RULES = new Set(["none", "daily", "weekly", "monthly", "yearly", "yearly-lunar"]);
+const REPEAT_RULES = new Set(["none", "daily", "workday", "weekly", "monthly", "yearly", "yearly-lunar"]);
 const VAPID = loadVapidKeys(process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "";
 const REMINDER_TICK_MS = 30_000;
@@ -106,6 +106,14 @@ CREATE TABLE IF NOT EXISTS reminders (
   PRIMARY KEY (task_id, occ_date, fire_at)
 );
 CREATE INDEX IF NOT EXISTS reminders_pending_idx ON reminders (fire_at) WHERE sent_at IS NULL;
+-- 按账号保存的界面配置（如日历上的幼儿园寒暑假），value 结构由各 key 自己校验
+CREATE TABLE IF NOT EXISTS user_settings (
+  user_id    BIGINT NOT NULL,
+  key        TEXT NOT NULL,
+  value      JSONB NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, key)
+);
 `;
 
 // 单用户时代的旧数据（user_id 为空）回填后再加约束
@@ -192,6 +200,7 @@ async function deleteUser(userId) {
     await client.query("DELETE FROM tasks WHERE user_id = $1", [userId]);
     await client.query("DELETE FROM reminders WHERE user_id = $1", [userId]);
     await client.query("DELETE FROM push_subscriptions WHERE user_id = $1", [userId]);
+    await client.query("DELETE FROM user_settings WHERE user_id = $1", [userId]);
     await client.query("DELETE FROM users WHERE id = $1", [userId]);
   });
 }
@@ -448,6 +457,47 @@ async function completeOccurrence(userId, taskId, date) {
     [now, taskId, userId],
   );
   return true;
+}
+
+/* ---------- 账号配置 ---------- */
+
+const SCHOOL_BREAKS_MAX = 50;
+
+/** 幼儿园寒暑假：{ enabled, breaks: [{ name, start, end }] }，end 为空表示结束日未定；不合法返回 null */
+function parseSchoolBreaks(body) {
+  if (typeof body?.enabled !== "boolean" || !Array.isArray(body.breaks) || body.breaks.length > SCHOOL_BREAKS_MAX) return null;
+  const breaks = [];
+  for (const b of body.breaks) {
+    const name = typeof b?.name === "string" ? b.name.trim().slice(0, 10) : "";
+    const end = b?.end ?? "";
+    if (!name || !DATE_RE.test(b.start ?? "") || (end && (!DATE_RE.test(end) || end < b.start))) return null;
+    breaks.push({ name, start: b.start, end });
+  }
+  breaks.sort((a, b) => a.start.localeCompare(b.start));
+  return { enabled: body.enabled, breaks };
+}
+
+/** 日历显示偏好：农历、休/班标记、每周起始日（0 周日 / 1 周一）、已完成任务、年视图任务 */
+function parseCalendarPrefs(body) {
+  const flags = ["lunar", "holidayMarks", "showCompleted", "yearTasks"];
+  if (!flags.every((k) => typeof body?.[k] === "boolean") || ![0, 1].includes(body.firstDay)) return null;
+  return { ...Object.fromEntries(flags.map((k) => [k, body[k]])), firstDay: body.firstDay };
+}
+
+// key -> 校验函数；不在表里的 key 一律 404
+const SETTING_PARSERS = { "school-breaks": parseSchoolBreaks, calendar: parseCalendarPrefs };
+
+async function getSetting(userId, key) {
+  const { rows } = await pool.query("SELECT value FROM user_settings WHERE user_id=$1 AND key=$2", [userId, key]);
+  return rows[0]?.value ?? null;
+}
+
+async function putSetting(userId, key, value) {
+  await pool.query(
+    `INSERT INTO user_settings (user_id, key, value, updated_at) VALUES ($1, $2, $3::jsonb, $4)
+     ON CONFLICT (user_id, key) DO UPDATE SET value = EXCLUDED.value, updated_at = EXCLUDED.updated_at`,
+    [userId, key, JSON.stringify(value), new Date().toISOString()],
+  );
 }
 
 /* ---------- 备份恢复 ---------- */
@@ -922,6 +972,17 @@ const server = createServer(async (req, res) => {
       const parsed = parseBackup(await readBody(req));
       if (parsed.error) return json(res, 400, { error: parsed.error });
       return json(res, 200, await importBackup(uid, parsed));
+    }
+
+    // 没存过返回 null，由前端给默认值
+    const settingMatch = path.match(/^\/api\/settings\/([a-z-]+)$/);
+    const parseSetting = settingMatch && Object.hasOwn(SETTING_PARSERS, settingMatch[1]) ? SETTING_PARSERS[settingMatch[1]] : null;
+    if (parseSetting && method === "GET") return json(res, 200, await getSetting(uid, settingMatch[1]));
+    if (parseSetting && method === "PUT") {
+      const value = parseSetting(await readBody(req));
+      if (!value) return json(res, 400, { error: "设置无效" });
+      await putSetting(uid, settingMatch[1], value);
+      return json(res, 200, value);
     }
 
     if (path === "/api/reminders" && method === "PUT") {

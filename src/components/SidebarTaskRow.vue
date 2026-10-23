@@ -4,6 +4,7 @@ import { Bell, CalendarArrowDown, CalendarClock, CalendarDays, Check, Flag, Flam
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useTaskStore } from "@/stores/tasks";
 import { reminderLabel } from "@/lib/reminders";
+import { lunarText } from "@/lib/lunar";
 import DateField from "@/components/DateField.vue";
 import SubtaskList from "@/components/SubtaskList.vue";
 import { expandedSubtasks } from "@/lib/subtask-ui";
@@ -62,6 +63,8 @@ const dateLabel = computed(() => {
   const base = `${d.getMonth() + 1}月${d.getDate()}日`;
   return d.getFullYear() === parseDate(store.currentDate).getFullYear() ? base : `${d.getFullYear()}年${base}`;
 });
+// 只有显示成公历月日时才带农历，今天/明天不用
+const lunarLabel = computed(() => (/\d日$/.test(dateLabel.value) ? lunarText(props.occurrence.date) : ""));
 // 设了提醒的未完成任务在行上直接显示提醒时间
 const remindLabel = computed(() =>
   props.occurrence.completed ? "" : reminderLabel(props.occurrence.task, props.occurrence.date, store.currentDate),
@@ -325,11 +328,12 @@ async function confirmDelete() {
             class="wb-row-date"
             :class="{ 'is-overdue': isOverdue, 'is-empty': !occurrence.date }"
             :disabled="occurrence.completed"
-            :aria-label="`日期：${dateLabel}${remindLabel ? `，提醒 ${remindLabel}` : ''}，点击修改`"
+            :aria-label="`日期：${dateLabel}${lunarLabel ? `（农历${lunarLabel}）` : ''}${remindLabel ? `，提醒 ${remindLabel}` : ''}，点击修改`"
             title="修改日期"
           >
             <CalendarDays aria-hidden="true" />
             <span>{{ dateLabel }}</span>
+            <span v-if="lunarLabel" class="wb-row-lunar">{{ lunarLabel }}</span>
             <span v-if="remindLabel" class="wb-row-remind"><Bell aria-hidden="true" />{{ remindLabel }}</span>
           </button>
         </PopoverTrigger>

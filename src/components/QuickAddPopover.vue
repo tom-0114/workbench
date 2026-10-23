@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import type { RepeatRule } from "@/lib/types";
 import { parseQuickAdd } from "@/lib/nl-parse";
+import { lunarText } from "@/lib/lunar";
 
 const props = withDefaults(defineProps<{ date: string; x: number; y: number; busy?: boolean }>(), {
   busy: false,
@@ -19,11 +20,12 @@ const cardEl = ref<HTMLFormElement>();
 const isMobileViewport = window.innerWidth < 768;
 
 /** “添加到 2026-10-14”太生硬，标题里用 10月14日 */
-const dateLabel = computed(() => {
-  const [y, m, d] = props.date.split("-").map(Number);
-  if (!y || !m || !d) return props.date;
-  return `${m}月${d}日`;
-});
+function dayLabel(date: string) {
+  const [y, m, d] = date.split("-").map(Number);
+  if (!y || !m || !d) return date;
+  return `${m}月${d}日（${lunarText(date)}）`;
+}
+const dateLabel = computed(() => dayLabel(props.date));
 
 /** 自然语言解析（明天/周五/每天…），实时预览 */
 const parsed = computed(() => parseQuickAdd(title.value));
@@ -113,7 +115,7 @@ onBeforeUnmount(() => {
         class="mt-1 px-1 text-[13px]"
         style="color: var(--text-tertiary)"
       >
-        将创建到 {{ parsed.dueDate ?? props.date }}<template v-if="parsed.repeatRule"> · {{ parsed.hint }}</template>
+        将创建到 {{ dayLabel(parsed.dueDate ?? props.date) }}<template v-if="parsed.repeatRule"> · {{ parsed.hint }}</template>
       </div>
     </form>
   </Teleport>

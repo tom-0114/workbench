@@ -1,6 +1,8 @@
 import type { NewTask, Task } from "./types";
 import type { TaskBackup } from "./backup";
 import type { ReminderEntry } from "./reminders";
+import type { SchoolBreakSettings } from "./school-breaks";
+import type { CalendarPrefs } from "./calendar-prefs";
 
 /** REST API 见 server/index.mjs；BASE_URL 由 vite 注入，部署在 /workbench/ 子路径时为 "/workbench/" */
 const BASE = `${import.meta.env.BASE_URL}api`;
@@ -39,6 +41,16 @@ export const taskRepo = {
     request<{ tasks: number; completions: number }>("/import", { method: "POST", body: JSON.stringify(backup) }),
   syncReminders: (reminders: ReminderEntry[]) =>
     request<{ count: number }>("/reminders", { method: "PUT", body: JSON.stringify({ reminders }) }),
+};
+
+/** 按账号保存的界面配置 */
+export const settingsRepo = {
+  getSchoolBreaks: () => request<SchoolBreakSettings | null>("/settings/school-breaks"),
+  putSchoolBreaks: (value: SchoolBreakSettings) =>
+    request<SchoolBreakSettings>("/settings/school-breaks", { method: "PUT", body: JSON.stringify(value) }),
+  getCalendarPrefs: () => request<CalendarPrefs | null>("/settings/calendar"),
+  putCalendarPrefs: (value: CalendarPrefs) =>
+    request<CalendarPrefs>("/settings/calendar", { method: "PUT", body: JSON.stringify(value) }),
 };
 
 export interface PushTestResult {

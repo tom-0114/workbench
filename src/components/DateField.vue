@@ -4,6 +4,8 @@ import dayjs from "dayjs";
 import { DatePicker } from "ant-design-vue";
 import { useMediaQuery } from "@vueuse/core";
 import { useTaskStore } from "@/stores/tasks";
+import { CalendarDays } from "lucide-vue-next";
+import { lunarCellText, lunarText } from "@/lib/lunar";
 
 const props = withDefaults(
   defineProps<{
@@ -55,5 +57,19 @@ const value = computed({
     :disabled-date="min ? disabledDate : undefined"
     :input-read-only="touch"
     :show-today="false"
-  />
+  >
+    <!-- 农历放在后缀里：format 写成函数会让输入框无法手输日期 -->
+    <template #suffixIcon>
+      <span v-if="model" class="wb-picker-lunar">{{ lunarText(model) }}</span>
+      <CalendarDays class="wb-picker-icon" aria-hidden="true" />
+    </template>
+    <template #dateRender="{ current }">
+      <div class="ant-picker-cell-inner wb-picker-cell">
+        <span>{{ current.date() }}</span>
+        <small :class="{ 'is-special': lunarCellText(current.format('YYYY-MM-DD')).special }">
+          {{ lunarCellText(current.format("YYYY-MM-DD")).text }}
+        </small>
+      </div>
+    </template>
+  </DatePicker>
 </template>
