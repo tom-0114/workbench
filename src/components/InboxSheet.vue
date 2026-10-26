@@ -28,7 +28,7 @@ async function schedule(id: number, date: string) {
       <div class="mx-auto mt-2.5 h-1 w-9 flex-none rounded-full" style="background: var(--border-subtle)" aria-hidden="true" />
       <SheetHeader class="border-b px-5 pb-3 pt-2 text-left">
         <SheetTitle>收集箱 · {{ store.inboxTasks.length }}</SheetTitle>
-        <SheetDescription>给事项选个日期，它就会出现在日历上</SheetDescription>
+        <SheetDescription class="sr-only">给事项选个日期，它就会出现在日历上</SheetDescription>
       </SheetHeader>
       <ul class="wb-inbox-sheet-list">
         <li v-for="task in store.inboxTasks" :key="task.id" :aria-busy="busyId === task.id">

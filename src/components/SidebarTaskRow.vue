@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from "vue";
 import { Bell, CalendarArrowDown, CalendarClock, CalendarDays, Check, Flag, Flame, Inbox, ListChecks, LoaderCircle, MoreHorizontal, Pencil, Repeat2, Trash2, X } from "lucide-vue-next";
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import LazyPopover from "@/components/LazyPopover.vue";
 import { useTaskStore } from "@/stores/tasks";
 import { reminderLabel } from "@/lib/reminders";
 import { lunarText } from "@/lib/lunar";
@@ -44,6 +44,9 @@ const dateBusy = ref(false);
 const scope = ref<"once" | "series">("once");
 const dateDraft = ref(props.occurrence.date);
 const priorityOpen = ref(false);
+const priorityBtn = ref<HTMLButtonElement>();
+const dateBtn = ref<HTMLButtonElement>();
+const actionsBtn = ref<HTMLButtonElement>();
 
 watch(
   () => props.occurrence.task.title,
@@ -293,89 +296,98 @@ async function confirmDelete() {
         <Repeat2 v-if="occurrence.isVirtual" class="wb-repeat-mark" aria-label="重复任务" />
       </button>
 
-      <Popover v-model:open="priorityOpen">
-        <PopoverTrigger as-child>
-          <button
-            type="button"
-            class="wb-task-priority wb-pri-btn"
-            :class="`wb-pri-${occurrence.task.priority}`"
-            :aria-label="`优先级：${PRIORITY_LABELS[occurrence.task.priority]}，点击修改`"
-            title="设置优先级"
-          >
-            <Flag aria-hidden="true" />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent class="wb-task-actions-menu wb-pri-menu" side="bottom" align="start" :align-offset="-8">
-          <button
-            v-for="p in [0, 1, 2, 3] as Priority[]"
-            :key="p"
-            type="button"
-            :class="{ 'is-current': occurrence.task.priority === p }"
-            :aria-label="`设为${PRIORITY_LABELS[p]}优先级`"
-            @click="applyPriority(p)"
-          >
-            <Flag aria-hidden="true" :class="p > 0 ? `wb-pri-${p}` : ''" />
-            {{ PRIORITY_LABELS[p] }}
-            <Check v-if="occurrence.task.priority === p" class="wb-menu-check" aria-hidden="true" />
-          </button>
-        </PopoverContent>
-      </Popover>
+      <button
+        ref="priorityBtn"
+        type="button"
+        class="wb-task-priority wb-pri-btn"
+        :class="`wb-pri-${occurrence.task.priority}`"
+        :aria-label="`优先级：${PRIORITY_LABELS[occurrence.task.priority]}，点击修改`"
+        aria-haspopup="dialog"
+        :aria-expanded="priorityOpen"
+        title="设置优先级"
+        @click="priorityOpen = !priorityOpen"
+      >
+        <Flag aria-hidden="true" />
+      </button>
+      <LazyPopover v-model:open="priorityOpen" :anchor="priorityBtn" :aria-label="`优先级：${occurrence.task.title}`" class="wb-task-actions-menu wb-pri-menu" side="bottom" align="start" :align-offset="-8">
+        <button
+          v-for="p in [0, 1, 2, 3] as Priority[]"
+          :key="p"
+          type="button"
+          :class="{ 'is-current': occurrence.task.priority === p }"
+          :aria-label="`设为${PRIORITY_LABELS[p]}优先级`"
+          @click="applyPriority(p)"
+        >
+          <Flag aria-hidden="true" :class="p > 0 ? `wb-pri-${p}` : ''" />
+          {{ PRIORITY_LABELS[p] }}
+          <Check v-if="occurrence.task.priority === p" class="wb-menu-check" aria-hidden="true" />
+        </button>
+      </LazyPopover>
 
-      <Popover v-model:open="dateOpen">
-        <PopoverTrigger as-child>
-          <button
-            type="button"
-            class="wb-row-date"
-            :class="{ 'is-overdue': isOverdue, 'is-empty': !occurrence.date }"
-            :disabled="occurrence.completed"
-            :aria-label="`日期：${dateLabel}${lunarLabel ? `（农历${lunarLabel}）` : ''}${remindLabel ? `，提醒 ${remindLabel}` : ''}，点击修改`"
-            title="修改日期"
-          >
-            <CalendarDays aria-hidden="true" />
-            <span>{{ dateLabel }}</span>
-            <span v-if="lunarLabel" class="wb-row-lunar">{{ lunarLabel }}</span>
-            <span v-if="remindLabel" class="wb-row-remind"><Bell aria-hidden="true" />{{ remindLabel }}</span>
-          </button>
-        </PopoverTrigger>
-        <PopoverContent class="wb-date-pop" side="bottom" align="end" :align-offset="-4">
-          <label class="wb-date-pop-field">
-            <span>日期</span>
-            <DateField v-model="pickedDate" :label="`选择日期：${occurrence.task.title}`" :disabled="dateBusy" :clearable="false" :presets="false" />
-          </label>
-          <div
-            v-if="occurrence.isVirtual"
-            class="wb-date-scope"
-            role="radiogroup"
-            :aria-label="`改期范围：${occurrence.task.title}`"
-          >
-            <button type="button" role="radio" :aria-checked="scope === 'once'" :class="{ 'is-current': scope === 'once' }" @click="scope = 'once'">仅这一次</button>
-            <button type="button" role="radio" :aria-checked="scope === 'series'" :class="{ 'is-current': scope === 'series' }" @click="scope = 'series'">整个系列</button>
-          </div>
-          <p v-if="occurrence.isVirtual" class="wb-date-hint">
-            {{ scope === "once" ? "只移动这一天，后续重复不变" : "整个系列将从所选日期重新开始" }}
-          </p>
-          <div class="wb-date-quick">
-            <button type="button" :disabled="dateBusy" @click="applyDate(store.currentDate)">今天</button>
-            <button type="button" :disabled="dateBusy" @click="applyDate(addDays(store.currentDate, 1))">明天</button>
-            <button type="button" :disabled="dateBusy" @click="applyDate(addDays(store.currentDate, 2))">后天</button>
-            <button type="button" :disabled="dateBusy" @click="applyDate(addDays(store.currentDate, 7))">一周后</button>
-          </div>
-          <button
-            v-if="!occurrence.isVirtual && occurrence.date"
-            type="button"
-            class="wb-date-clear"
-            :disabled="dateBusy"
-            title="清除后移入收集箱"
-            @click="applyDate('')"
-          >
-            清除日期
-          </button>
-        </PopoverContent>
-      </Popover>
+      <button
+        ref="dateBtn"
+        type="button"
+        class="wb-row-date"
+        :class="{ 'is-overdue': isOverdue, 'is-empty': !occurrence.date }"
+        :disabled="occurrence.completed"
+        :aria-label="`日期：${dateLabel}${lunarLabel ? `（农历${lunarLabel}）` : ''}${remindLabel ? `，提醒 ${remindLabel}` : ''}，点击修改`"
+        aria-haspopup="dialog"
+        :aria-expanded="dateOpen"
+        title="修改日期"
+        @click="dateOpen = !dateOpen"
+      >
+        <CalendarDays aria-hidden="true" />
+        <span>{{ dateLabel }}</span>
+        <span v-if="lunarLabel" class="wb-row-lunar">{{ lunarLabel }}</span>
+        <span v-if="remindLabel" class="wb-row-remind"><Bell aria-hidden="true" />{{ remindLabel }}</span>
+      </button>
+      <LazyPopover v-model:open="dateOpen" :anchor="dateBtn" :aria-label="`修改日期：${occurrence.task.title}`" class="wb-date-pop" side="bottom" align="end" :align-offset="-4">
+        <label class="wb-date-pop-field">
+          <span>日期</span>
+          <DateField v-model="pickedDate" :label="`选择日期：${occurrence.task.title}`" :disabled="dateBusy" :clearable="false" :presets="false" />
+        </label>
+        <div
+          v-if="occurrence.isVirtual"
+          class="wb-date-scope"
+          role="radiogroup"
+          :aria-label="`改期范围：${occurrence.task.title}`"
+        >
+          <button type="button" role="radio" :aria-checked="scope === 'once'" :class="{ 'is-current': scope === 'once' }" @click="scope = 'once'">仅这一次</button>
+          <button type="button" role="radio" :aria-checked="scope === 'series'" :class="{ 'is-current': scope === 'series' }" @click="scope = 'series'">整个系列</button>
+        </div>
+        <p v-if="occurrence.isVirtual" class="wb-date-hint">
+          {{ scope === "once" ? "只移动这一天，后续重复不变" : "整个系列将从所选日期重新开始" }}
+        </p>
+        <div class="wb-date-quick">
+          <button type="button" :disabled="dateBusy" @click="applyDate(store.currentDate)">今天</button>
+          <button type="button" :disabled="dateBusy" @click="applyDate(addDays(store.currentDate, 1))">明天</button>
+          <button type="button" :disabled="dateBusy" @click="applyDate(addDays(store.currentDate, 2))">后天</button>
+          <button type="button" :disabled="dateBusy" @click="applyDate(addDays(store.currentDate, 7))">一周后</button>
+        </div>
+        <button
+          v-if="!occurrence.isVirtual && occurrence.date"
+          type="button"
+          class="wb-date-clear"
+          :disabled="dateBusy"
+          title="清除后移入收集箱"
+          @click="applyDate('')"
+        >
+          清除日期
+        </button>
+      </LazyPopover>
 
-      <Popover v-model:open="actionsOpen">
-        <PopoverTrigger as-child><button class="wb-control wb-task-more" :aria-label="`更多操作：${occurrence.task.title}`"><MoreHorizontal /></button></PopoverTrigger>
-        <PopoverContent class="wb-task-actions-menu" side="bottom" align="end" @click="actionsOpen=false">
+      <button
+        ref="actionsBtn"
+        type="button"
+        class="wb-control wb-task-more"
+        :aria-label="`更多操作：${occurrence.task.title}`"
+        aria-haspopup="dialog"
+        :aria-expanded="actionsOpen"
+        @click="actionsOpen = !actionsOpen"
+      >
+        <MoreHorizontal />
+      </button>
+      <LazyPopover v-model:open="actionsOpen" :anchor="actionsBtn" :aria-label="`更多操作：${occurrence.task.title}`" class="wb-task-actions-menu" side="bottom" align="end" @click="actionsOpen = false">
         <button type="button" aria-label="重命名" title="直接在列表里改标题" @click="beginRename">
           <Pencil aria-hidden="true" />
           重命名
@@ -425,8 +437,7 @@ async function confirmDelete() {
           <Trash2 aria-hidden="true" />
           删除任务
         </button>
-        </PopoverContent>
-      </Popover>
+      </LazyPopover>
 
       <button
         v-if="subtasks.length"

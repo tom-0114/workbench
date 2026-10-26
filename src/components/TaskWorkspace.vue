@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
-import { useMediaQuery } from '@vueuse/core';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { useElementVisibility, useMediaQuery } from '@vueuse/core';
 import { Solar } from 'lunar-typescript';
 import { Bell, CalendarDays, CalendarRange, Check, CheckCheck, ChevronDown, ChevronRight, Download, Inbox, ListTodo, LogOut, Menu, Plus, Search, Settings, Settings2, Sun, Tag, Trash2, Upload, UserCog, X } from 'lucide-vue-next';
 import { useTaskStore } from '@/stores/tasks';
@@ -161,28 +161,43 @@ const groups = computed(() => {
   return [{key:'pending',label:view.value==='inbox'?'未安排日期':'待办',items:pending.value}].filter(g=>g.items.length);
 });
 const progress = computed(() => store.todayOccurrences.length ? Math.round(store.todayOccurrences.filter(o=>o.completed).length/store.todayOccurrences.length*100) : 0);
-// 大清单分段渲染：一次挂载上千行会让切换明显卡顿，先渲染一部分，点“显示更多”继续
-const RENDER_STEP = 400;
-const renderLimit = ref(150);
-function limitItems<T>(items: T[]): T[] { return items.length > renderLimit.value ? items.slice(0, renderLimit.value) : items; }
-// 上限按所有分组合计：已完成页按天分组时可能有上千个小组，逐组限制等于没限制
-const visibleGroups = computed(() => {
+// 大清单分段渲染：一屏只看得到十来行，先挂 50 行，滚到底部附近再自动续上
+const RENDER_INITIAL = 50;
+const RENDER_STEP = 100;
+const renderLimit = ref(RENDER_INITIAL);
+// 上限按待办各组和已完成合计：已完成页按天分组时可能有上千个小组，逐组限制等于没限制
+const visibleList = computed(() => {
   let left = renderLimit.value;
-  const out: Array<{ key: string; label: string; items: Occurrence[]; total: number }> = [];
+  const groupsOut: Array<{ key: string; label: string; items: Occurrence[]; total: number }> = [];
   for (const g of groups.value) {
     if (left <= 0) break;
     const items = g.items.length > left ? g.items.slice(0, left) : g.items;
-    out.push({ ...g, items, total: g.items.length });
+    groupsOut.push({ ...g, items, total: g.items.length });
     left -= items.length;
   }
-  return out;
+  const pendingShown = groupsOut.length === groups.value.length && groupsOut.every(g => g.items.length === g.total);
+  // 待办没显示完时已完成整组不出现，免得标题夹在中间
+  return { groups: groupsOut, showDone: pendingShown, done: pendingShown ? done.value.slice(0, Math.max(left, 0)) : [] };
 });
+const visibleGroups = computed(() => visibleList.value.groups);
 const moreCount = computed(() => {
   const total = groups.value.reduce((n,group) => n + group.items.length, 0) + done.value.length;
-  const rendered = visibleGroups.value.reduce((n,group) => n + group.items.length, 0) + limitItems(done.value).length;
+  const rendered = visibleGroups.value.reduce((n,group) => n + group.items.length, 0) + visibleList.value.done.length;
   return total - rendered;
 });
 function showMore() { renderLimit.value += RENDER_STEP; }
+const moreEl = ref<HTMLElement>();
+const moreVisible = useElementVisibility(moreEl, { scrollTarget: scrollEl, rootMargin: '0px 0px 600px 0px' });
+// 可见性回调要等下一帧才更新；加载后按钮仍在可视范围内（内容不够长）就自己量一次再续
+async function autoLoad() {
+  if (moreCount.value <= 0) return;
+  showMore();
+  await nextTick();
+  await new Promise(requestAnimationFrame);
+  const btn = moreEl.value, box = scrollEl.value;
+  if (btn && box && btn.getBoundingClientRect().top < box.getBoundingClientRect().bottom + 600) void autoLoad();
+}
+watch(moreVisible, (visible) => { if (visible) void autoLoad(); });
 /** 分组对应的拖放日期：今天清单只有“今天”组可放，最近 7 天每天都可放 */
 function dropDate(key: string) {
   if(view.value==='today') return key==='today' ? store.currentDate : undefined;
@@ -211,7 +226,7 @@ function formatDate(date: string) {
 }
 // 切换清单只换数据源，不强制重建列表（重建会让大列表整屏重挂载造成卡顿）；滚动位置手动复位
 async function navigate(target: View, tag = '') {
-  view.value=target;activeTag.value=tag;navOpen.value=false;collapsed.value=new Set();renderLimit.value=150;
+  view.value=target;activeTag.value=tag;navOpen.value=false;collapsed.value=new Set();renderLimit.value=RENDER_INITIAL;
   await nextTick();
   scrollEl.value?.scrollTo({top:0});
 }
@@ -304,7 +319,7 @@ onBeforeUnmount(()=>window.removeEventListener('keydown',onKey));
       <header class="wb-list-header">
         <div class="wb-list-heading">
           <button v-if="mobile" class="wb-control" aria-label="打开清单导航" :aria-expanded="navOpen" @click="navOpen=true"><Menu /></button>
-          <div><h1>{{ title }}</h1><p v-if="view==='today'">{{ dateLabel }}<span class="wb-lunar">{{ lunarLabel }}</span></p><p v-else-if="view==='upcoming'">{{ formatDate(store.currentDate) }} — {{ formatDate(addDays(store.currentDate,6)) }}</p><p v-else-if="view==='inbox'">先记下来，稍后安排</p><p v-else-if="view==='tag'">按标签整理的任务</p></div>
+          <div><h1>{{ title }}</h1><p v-if="view==='today'">{{ dateLabel }}<span class="wb-lunar">{{ lunarLabel }}</span></p><p v-else-if="view==='upcoming'">{{ formatDate(store.currentDate) }} — {{ formatDate(addDays(store.currentDate,6)) }}</p></div>
         </div>
         <div v-if="view==='calendar'" class="wb-calendar-actions">
           <button type="button" class="wb-control" aria-label="日历设置" title="日历设置" @click="calendarSettingsOpen=true"><Settings aria-hidden="true" /></button>
@@ -333,8 +348,8 @@ onBeforeUnmount(()=>window.removeEventListener('keydown',onKey));
               <p v-if="!group.total" class="wb-group-empty" :class="{ 'is-always': view==='today' }">{{ view==='today' ? '把逾期任务拖到这里，安排到今天' : '没有任务，可以把其他日子的任务拖过来' }}</p>
             </section>
             <section v-if="view==='today'&&listDrag.dragging.value" class="wb-task-group wb-drop-extra" :data-drop-date="addDays(store.currentDate,1)"><h2>拖到这里，推迟到明天</h2></section>
-            <section v-if="done.length" class="wb-task-group wb-completed-group"><button class="wb-group-heading" :aria-expanded="showDone" @click="showDone=!showDone"><ChevronRight :class="{ 'is-expanded': showDone }" /><h2>已完成</h2><span>{{ done.length }}</span></button><ul v-show="showDone" class="wb-task-list"><SidebarTaskRow v-for="occ in limitItems(done)" :key="`${occ.task.id}:${occ.date}`" :occurrence="occ" :selected="selectedKey===`${occ.task.id}:${occ.date}`" @open-task="emit('open-task',$event)" /></ul></section>
-            <button v-if="moreCount>0" class="wb-list-more" @click="showMore">显示更多，还有 {{ moreCount }} 项</button>
+            <section v-if="done.length&&visibleList.showDone" class="wb-task-group wb-completed-group"><button class="wb-group-heading" :aria-expanded="showDone" @click="showDone=!showDone"><ChevronRight :class="{ 'is-expanded': showDone }" /><h2>已完成</h2><span>{{ done.length }}</span></button><ul v-show="showDone" class="wb-task-list"><SidebarTaskRow v-for="occ in visibleList.done" :key="`${occ.task.id}:${occ.date}`" :occurrence="occ" :selected="selectedKey===`${occ.task.id}:${occ.date}`" @open-task="emit('open-task',$event)" /></ul></section>
+            <button v-if="moreCount>0" ref="moreEl" class="wb-list-more" @click="showMore">显示更多，还有 {{ moreCount }} 项</button>
             <div v-if="!groups.length&&!done.length" class="wb-list-empty"><CheckCheck v-if="view==='today'||view==='completed'" /><Search v-else-if="view==='search'" /><Inbox v-else /><h2>{{ emptyText }}</h2><p v-if="view==='today'">留一点时间给自己，也可以添加新的安排。</p><p v-else-if="view==='inbox'">添加任务后，点开详情即可设置日期。</p></div>
           </template>
         </div>

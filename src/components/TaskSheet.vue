@@ -149,7 +149,7 @@ async function remove() {
         <DialogDescription v-if="draft.repeatRule !== 'none'">
           重复任务（{{ REPEAT_LABELS[draft.repeatRule] }}{{ untilText }}）：编辑将作用于整个系列
         </DialogDescription>
-        <DialogDescription v-else>点空白处关闭会自动保存。</DialogDescription>
+        <DialogDescription v-else class="sr-only">编辑任务标题、日期和备注。</DialogDescription>
       </DialogHeader>
 
       <TaskSheetForm

@@ -80,8 +80,7 @@ function addReminder() {
 const remindHint = computed(() => {
   if (!props.draft.dueDate) return "先选日期，才能设置提醒";
   if (!fire.value) return "";
-  if (fire.value.getTime() < Date.now()) return "这个时间已经过去，不会再提醒";
-  return props.draft.repeatRule === "none" ? "" : "重复任务的每一次都按同样的间隔提醒";
+  return fire.value.getTime() < Date.now() ? "这个时间已经过去，不会再提醒" : "";
 });
 const pushHint = computed(() => {
   if (props.draft.remindOffset == null) return "";
@@ -124,8 +123,7 @@ const workdayHint = computed(() => {
   const { repeatRule, dueDate } = props.draft;
   if (repeatRule !== "workday" || !dueDate) return "";
   const lastYear = Number((repeatUntil.value || "9999").slice(0, 4));
-  if (lastYear <= HOLIDAY_DATA_LAST_YEAR) return "跳过法定节假日，调休上班日照常";
-  return `跳过法定节假日，调休上班日照常；${HOLIDAY_DATA_LAST_YEAR + 1} 年起的安排还没公布，暂按周一到周五`;
+  return lastYear > HOLIDAY_DATA_LAST_YEAR ? `${HOLIDAY_DATA_LAST_YEAR + 1} 年起的节假日安排还没公布，暂按周一到周五` : "";
 });
 
 // 单次完成：按打开的那一天打卡，即时保存，不影响系列里的其他日子
@@ -258,7 +256,7 @@ const repeatOptions: Task["repeatRule"][] = [
       </div>
 
       <div v-if="!draft.parentId" class="wb-form-field">
-        <Label>子任务<span class="wb-label-hint">改动即时保存</span></Label>
+        <Label>子任务</Label>
         <SubtaskList :parent-id="draft.id" :date="occurrenceDate || draft.dueDate" editable />
       </div>
 
@@ -289,7 +287,6 @@ const repeatOptions: Task["repeatRule"][] = [
       <label v-else-if="canCompleteOnce" class="flex cursor-pointer items-center gap-2 text-sm">
         <input type="checkbox" class="h-4 w-4" :checked="occurrenceDone" :disabled="togglingOnce" @change="toggleOnce" />
         {{ occurrenceLabel }} 这一次已完成
-        <span class="text-[13px]" style="color: var(--text-secondary)">· 只影响这一天，即时保存</span>
       </label>
     </fieldset>
     </div>

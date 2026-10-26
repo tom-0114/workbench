@@ -66,7 +66,7 @@ async function save() {
     <DialogContent class="flex max-h-[min(720px,calc(100dvh-32px))] flex-col sm:max-w-[680px] gap-4 p-5">
       <DialogHeader>
         <DialogTitle>日历设置</DialogTitle>
-        <DialogDescription>这些设置只影响日历页，换设备登录同一账号也一样。</DialogDescription>
+        <DialogDescription class="sr-only">日历的显示选项和幼儿园寒暑假</DialogDescription>
       </DialogHeader>
 
       <div class="min-h-0 flex-1 space-y-5 overflow-y-auto">
@@ -86,7 +86,7 @@ async function save() {
         <section class="wb-cal-section" aria-labelledby="wb-cal-breaks">
           <h3 id="wb-cal-breaks">幼儿园寒暑假</h3>
           <label class="wb-cal-toggle">
-            <input v-model="enabled" type="checkbox" class="h-4 w-4" />在日历上每天打“寒假/暑假”标签
+            <input v-model="enabled" type="checkbox" class="h-4 w-4" />显示寒暑假
           </label>
           <div class="wb-break-rows" :class="{ 'opacity-50': !enabled }">
             <div v-for="(row, i) in rows" :key="i" class="wb-break-row">
@@ -97,11 +97,11 @@ async function save() {
                 <Trash2 aria-hidden="true" />
               </button>
             </div>
-            <p v-if="!rows.length" class="text-sm" style="color: var(--text-tertiary)">还没有假期，点下面添加。</p>
+            <p v-if="!rows.length" class="text-sm" style="color: var(--text-tertiary)">还没有假期</p>
           </div>
           <Button variant="outline" size="sm" class="self-start" @click="addRow"><Plus data-icon="inline-start" aria-hidden="true" />添加假期</Button>
           <p class="text-[12px]" style="color: var(--text-tertiary)">
-            结束日期未定时只标开始那天。苏州市中小学和幼儿园用同一份校历，新学期校历发布后在这里补上。
+            结束日期未定时只标开始那天
           </p>
         </section>
       </div>

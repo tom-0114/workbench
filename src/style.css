@@ -1907,7 +1907,6 @@ body.wb-list-dragging, body.wb-list-dragging * { cursor:grabbing !important; use
 .wb-subtask-add input { flex:1; min-width:0; border:none; background:transparent; color:var(--text-primary); font-size:13px; outline:none; }
 .wb-subtasks.is-editable { padding:4px 0; border:1px solid var(--border); border-radius:8px; }
 .wb-subtasks.is-editable .wb-subtask, .wb-subtasks.is-editable .wb-subtask-add { padding-inline:10px; }
-.wb-label-hint { margin-left:8px; color:var(--text-tertiary); font-size:12px; font-weight:400; }
 .wb-event .wb-event-subs { flex:none; color:var(--text-tertiary); font-size:11px; font-variant-numeric:tabular-nums; }
 @media (hover:none) { .wb-subtask-remove { opacity:1; } }
 @media (max-width:767px) {

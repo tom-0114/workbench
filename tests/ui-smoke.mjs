@@ -205,7 +205,7 @@ try {
     await openDetail(page,'写周报');
     await page.getByRole('combobox',{name:'重复'}).click();
     await page.getByRole('option',{name:'每个工作日',exact:true}).click();
-    await page.getByText(/跳过法定节假日/).waitFor();
+    await page.getByText(/暂按周一到周五/).waitFor();
     await save(page);
     await waitForTask(11,t=>t.repeatRule==='workday');
     // 恢复为每周，避免影响后续用例
@@ -527,8 +527,8 @@ try {
         return performance.now()-t0;
       },label);
       console.log(`  切换「${label}」耗时 ${ms.toFixed(0)}ms`);
-      // 开发模式行挂载约为生产 2-4 倍且有环境抖动；900ms 足以抓住 O(打卡×任务) 级别的秒级回归
-      assert.ok(ms<900,`切换「${label}」耗时 ${ms.toFixed(0)}ms，超出 900ms`);
+      // 首屏只挂 50 行、行内菜单按需挂载，开发模式约 80ms；300ms 留出环境抖动，又能抓住每行组件变多的回归
+      assert.ok(ms<300,`切换「${label}」耗时 ${ms.toFixed(0)}ms，超出 300ms`);
     }
     // 分段渲染：显示更多继续加载
     await nav(page,'已完成');
