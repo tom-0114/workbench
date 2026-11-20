@@ -1962,3 +1962,5 @@ body.wb-list-dragging, body.wb-list-dragging * { cursor:grabbing !important; use
 .wb-cal-section h3 { font-size:13px; font-weight:600; color:var(--text-secondary); }
 .wb-cal-toggle { display:flex; align-items:center; gap:8px; font-size:14px; cursor:pointer; }
 .wb-cal-toggle label { display:inline-flex; align-items:center; gap:4px; cursor:pointer; }
+/* “另外 N 个”弹层会带上当天格子的类名，周末/休/班的半透明底色会让下面的任务透上来 */
+.wb-calendar .fc .fc-more-popover.fc-popover.fc-day { background: var(--bg-primary); }
