@@ -1,0 +1,2 @@
+# 部署脚本在 Git Bash 里执行，换成 CRLF 会报错
+*.sh text eol=lf
