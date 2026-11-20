@@ -33,6 +33,9 @@ npm run dev                          # 前端，/api 已代理到 3002
 
 ## 部署（阿里云 ECS）
 
+日常更新在本机执行 `./deploy.sh`（要求工作区已全部提交）：构建前端 → 打包已提交的 `server/` 和 `dist/` → 上传 → 服务器先备份库（`pg_dump`）和代码到 `/opt/backups/`，再覆盖代码、重启后端、检查接口。SSH 用 `~/.ssh/config` 里的 `aliyun-ecs` 别名；公网 22 端口只对安全组里放行的 IP 开放，换了网络要去安全组更新来源 IP。
+
+- 服务器目录：`/opt/apps/workbench`（不是 git 仓库），`server/.env`、`server/node_modules` 不随部署覆盖
 - 后端：`server/index.mjs`（systemd `workbench-api.service`，127.0.0.1:3002），`DATABASE_URL` 指向本机 Docker PostgreSQL 的 `workbench` 库
 - 前端：`WEB_BASE_PATH=/workbench/ npm run build`，`dist/` 由 nginx 挂在 `/workbench/` 子路径，API 经 `/workbench/api/` 反代到 3002 端口
 - 鉴权：签名的 HttpOnly Cookie；生产环境需在 `server/.env` 配置 `AUTH_SECRET` 与 `AUTH_COOKIE_PATH=/workbench`，可参考 `server/.env.example`
